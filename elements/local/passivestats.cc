@@ -47,11 +47,15 @@ PassiveStats::~PassiveStats()
 int
 PassiveStats::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-  _stats_interval = 5;
+  _stats_interval = 0;
   _only_data = true;
+  _output_xml_file = String("");
+  _verbose = true;
   if (cp_va_kparse(conf, this, errh,
-           "STATS_INTERVAL", cpkP+cpkM, cpUnsigned, &_stats_interval,
+           "OUTPUT_XML_FILE", cpkP, cpString, &_output_xml_file,
+           "STATS_INTERVAL", cpkP, cpUnsigned, &_stats_interval,
            "ONLY_DATA", cpkP, cpBool, &_only_data,
+           "VERBOSE", cpkP, cpBool, &_verbose,
            cpEnd) < 0)
     return -1;
   return 0;
@@ -70,10 +74,16 @@ PassiveStats::run_timer(Timer *)
 {
   if (_stats_interval > 0) {
     _timer.schedule_after_sec(_stats_interval);
-    print_xml();
+    if (_verbose)
+      print_and_clear_stats();
   } 
 }
 
+void
+PassiveStats::cleanup(CleanupStage)
+{
+  print_xml();
+}
 
 void 
 PassiveStats::print_and_clear_stats()
@@ -129,12 +139,19 @@ PassiveStats::print_and_clear_stats()
 void 
 PassiveStats::print_xml()
 {
-  //Timestamp now = Timestamp::now();
+  if (_output_xml_file == "") {
+    return;
+  }
+  
+  FILE *fp_xml = fopen(_output_xml_file.c_str(),"w");
+  if(fp_xml == 0) {
+    click_chatter("cannot open file %s", _output_xml_file.c_str());
+    return;
+  }
+
   StringAccum sa;
   String direction_string;
   sa << "<?xml version='1.0' standalone='yes'?>\n";
-  sa << "<trace file='/tmp/viveksiphone_tap0_Jan16.pcap'>\n";
-
   for (PassiveStats::LIter iter = _links.begin(); iter.live(); iter++) {
     WirelessLink current_link = iter.key();
     LinkInfoAllDirections ld = iter.value();
@@ -142,7 +159,7 @@ PassiveStats::print_xml()
     sa << " client='" << current_link.return_client().unparse_colon() << "'";
     sa << " bssid='" << current_link.return_bssid().unparse_colon() << "'>\n";
     for (PassiveStats::DIter diter = ld.begin(); diter.live(); diter++) {
-        int current_link_direction = diter.key();
+      int current_link_direction = diter.key();
       PassiveStats::LinkInfo l = diter.value();
       switch(current_link_direction) {
       case NODS:
@@ -193,8 +210,12 @@ PassiveStats::print_xml()
     sa << "</link>\n";
   }
   //_links.clear();
-  click_chatter("%s",sa.c_str());
   //return sa.take_string();
+  if (_verbose) {
+    click_chatter("%s",sa.c_str());
+  }
+  fprintf(fp_xml, "%s",sa.c_str());
+  fclose(fp_xml);
 }
 
 
