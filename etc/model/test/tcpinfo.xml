@@ -1,0 +1,823 @@
+<?xml version='1.0' standalone='yes'?>
+<trace file='/tmp/viveksiphone_tap0_Jan16.pcap'>
+
+<flow aggregate='63' src='192.168.1.105' sport='51651' dst='23.197.50.83' dport='80' begin='1484596092.456936999' duration='65.048827001' filepos='249532'>
+  <stream dir='0' ndata='9' nack='36' beginseq='166789583' seqlen='2740' mtu='484'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='208032611' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='64' src='192.168.1.105' sport='51652' dst='172.217.6.34' dport='80' begin='1484596093.456265999' duration='49.980289001' filepos='250270'>
+  <stream dir='0' ndata='4' nack='4' beginseq='2814293292' seqlen='1260' mtu='707' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3169804949' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='1' src='192.168.1.105' sport='51558' dst='104.82.35.33' dport='80' begin='1484596058.076512999' duration='0.000134001' filepos='2813'>
+  <stream dir='0' ndata='4' nack='4' beginseq='2795873417' seqlen='254' mtu='178' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2170803789' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='65' src='192.168.1.105' sport='51650' dst='23.197.50.89' dport='80' begin='1484596093.456322999' duration='31.607052001' filepos='250364'>
+  <stream dir='0' ndata='5' nack='17' beginseq='243317506' seqlen='1010' mtu='607'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2125198353' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='2' src='192.168.1.105' sport='51559' dst='17.167.192.126' dport='443' begin='1484596059.076186999' duration='1.000242001' filepos='5526'>
+  <stream dir='0' ndata='9' nack='21' beginseq='995608630' seqlen='1211' mtu='380' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3988674594' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='66' src='192.168.1.105' sport='51653' dst='74.201.198.73' dport='443' begin='1484596093.456620999' duration='0.000167001' filepos='252128'>
+  <stream dir='0' ndata='2' nack='1' beginseq='3373053682' seqlen='2' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1970757621' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='3' src='192.168.1.105' sport='51560' dst='17.167.194.205' dport='443' begin='1484596060.076084999' duration='0.000000001' filepos='5620'>
+  <stream dir='0' ndata='1' nack='0' beginseq='261373998' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='67' src='192.168.1.105' sport='51654' dst='23.197.50.83' dport='80' begin='1484596093.456803999' duration='31.606739001' filepos='253281'>
+  <stream dir='0' ndata='4' nack='4' beginseq='599094400' seqlen='4' mtu='52'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3076531739' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='4' src='192.168.1.105' sport='51561' dst='17.167.192.126' dport='443' begin='1484596060.076396999' duration='0.999945001' filepos='8756'>
+  <stream dir='0' ndata='9' nack='5' beginseq='2948272522' seqlen='2763' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1258552294' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='68' src='192.168.1.105' sport='51655' dst='23.197.50.83' dport='80' begin='1484596093.456863999' duration='64.048879001' filepos='253527'>
+  <stream dir='0' ndata='8' nack='97' beginseq='2923311829' seqlen='2245' mtu='586' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='666346161' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='5' src='192.168.1.105' sport='51562' dst='17.253.5.205' dport='443' begin='1484596070.076328999' duration='2.001287001' filepos='19104'>
+  <stream dir='0' ndata='12' nack='12' beginseq='772667681' seqlen='1062' mtu='569' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3495693502' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='69' src='192.168.1.105' sport='51657' dst='68.71.222.248' dport='80' begin='1484596093.457092999' duration='32.147831001' filepos='254319'>
+  <stream dir='0' ndata='7' nack='2' beginseq='3229896627' seqlen='4294' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='4281391434' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='6' src='192.168.1.105' sport='51563' dst='68.71.212.43' dport='80' begin='1484596071.076398999' duration='2.000355001' filepos='22722'>
+  <stream dir='0' ndata='5' nack='15' beginseq='3961423439' seqlen='3139' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3077299017' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='70' src='192.168.1.105' sport='51658' dst='96.45.49.139' dport='80' begin='1484596093.457194999' duration='0.000012001' filepos='254507'>
+  <stream dir='0' ndata='1' nack='1' beginseq='1941263147' seqlen='1' mtu='52'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3093330164' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='7' src='192.168.1.105' sport='51564' dst='64.13.170.11' dport='443' begin='1484596071.076433999' duration='2.865440001' filepos='22816'>
+  <stream dir='0' ndata='9' nack='8' beginseq='3025777730' seqlen='1664' mtu='486' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='532963149' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='71' src='192.168.1.105' sport='51660' dst='172.217.6.66' dport='443' begin='1484596094.456331999' duration='15.000840001' filepos='256757'>
+  <stream dir='0' ndata='20' nack='56' beginseq='1625981229' seqlen='5216' mtu='1238' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='746996089' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='8' src='192.168.1.105' sport='51565' dst='64.13.170.11' dport='443' begin='1484596071.078715999' duration='0.001568001' filepos='30334'>
+  <stream dir='0' ndata='28' nack='29' beginseq='18313090' seqlen='6475' mtu='326' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3719471114' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='72' src='192.168.1.105' sport='51661' dst='23.197.50.97' dport='80' begin='1484596094.457384999' duration='31.494127001' filepos='264661'>
+  <stream dir='0' ndata='6' nack='5' beginseq='3589326055' seqlen='1143' mtu='622' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='617887584' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='9' src='192.168.1.105' sport='51566' dst='199.181.132.159' dport='80' begin='1484596071.079833999' duration='0.000390001' filepos='39946'>
+  <stream dir='0' ndata='3' nack='2' beginseq='3079231211' seqlen='2522' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1589670017' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='73' src='192.168.1.105' sport='51662' dst='138.108.50.100' dport='80' begin='1484596094.457398999' duration='4.999151001' filepos='264755'>
+  <stream dir='0' ndata='4' nack='4' beginseq='1247360432' seqlen='1499' mtu='803' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1662375147' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='10' src='192.168.1.105' sport='51567' dst='64.13.170.11' dport='443' begin='1484596072.076113999' duration='2.849678001' filepos='44904'>
+  <stream dir='0' ndata='8' nack='8' beginseq='588229289' seqlen='1422' mtu='486' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1485048965' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='74' src='192.168.1.105' sport='51663' dst='54.201.223.162' dport='9571' begin='1484596094.457866999' duration='172.098575001' filepos='272542'>
+  <stream dir='0' ndata='25' nack='59' beginseq='2128765887' seqlen='2469' mtu='591' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1885751878' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='11' src='192.168.1.105' sport='51568' dst='64.13.170.11' dport='443' begin='1484596072.076129999' duration='1.870252001' filepos='44998'>
+  <stream dir='0' ndata='8' nack='8' beginseq='2634647019' seqlen='1347' mtu='447' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3645729786' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='75' src='192.168.1.105' sport='51664' dst='68.71.222.248' dport='80' begin='1484596094.457942999' duration='31.146628001' filepos='273452'>
+  <stream dir='0' ndata='6' nack='9' beginseq='3414049022' seqlen='2503' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3700118364' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='12' src='192.168.1.105' sport='51569' dst='64.13.170.11' dport='443' begin='1484596072.076625999' duration='1.000378001' filepos='49989'>
+  <stream dir='0' ndata='17' nack='19' beginseq='1548783595' seqlen='3655' mtu='322' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3680540870' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='76' src='192.168.1.105' sport='51665' dst='23.74.50.90' dport='443' begin='1484596095.458052999' duration='106.098147001' filepos='289425'>
+  <stream dir='0' ndata='54' nack='27' beginseq='1070790118' seqlen='53261' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1356556489' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='13' src='192.168.1.105' sport='51572' dst='17.249.9.246' dport='443' begin='1484596072.077007999' duration='0.000323001' filepos='51871'>
+  <stream dir='0' ndata='5' nack='2' beginseq='3302759930' seqlen='804' mtu='569' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3194038970' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='77' src='192.168.1.105' sport='51666' dst='172.217.6.38' dport='80' begin='1484596096.456328999' duration='45.981682001' filepos='299151'>
+  <stream dir='0' ndata='4' nack='12' beginseq='3135670204' seqlen='772' mtu='462' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='214860705' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='14' src='192.168.1.105' sport='51573' dst='64.13.170.11' dport='443' begin='1484596072.077656999' duration='1.866833001' filepos='57754'>
+  <stream dir='0' ndata='16' nack='16' beginseq='4026185017' seqlen='3413' mtu='325' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2828138953' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='78' src='192.168.1.105' sport='51667' dst='172.217.6.38' dport='80' begin='1484596096.456415999' duration='45.981576001' filepos='299769'>
+  <stream dir='0' ndata='5' nack='6' beginseq='3236504313' seqlen='771' mtu='461' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='574075134' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='15' src='192.168.1.105' sport='51575' dst='23.210.233.19' dport='80' begin='1484596073.076784999' duration='0.000088001' filepos='63090'>
+  <stream dir='0' ndata='1' nack='1' beginseq='3435240022' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3643567000' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='79' src='192.168.1.105' sport='51668' dst='172.217.6.38' dport='80' begin='1484596096.456461999' duration='45.981562001' filepos='299957'>
+  <stream dir='0' ndata='3' nack='4' beginseq='293629770' seqlen='412' mtu='462' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3574788006' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='16' src='192.168.1.105' sport='51577' dst='23.209.176.32' dport='443' begin='1484596073.941799999' duration='0.000722001' filepos='64023'>
+  <stream dir='0' ndata='4' nack='3' beginseq='3108504848' seqlen='600' mtu='540'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1349178402' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='80' src='192.168.1.105' sport='51669' dst='23.74.12.221' dport='443' begin='1484596101.456402999' duration='39.988619001' filepos='308108'>
+  <stream dir='0' ndata='8' nack='7' beginseq='424720910' seqlen='1212' mtu='477' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='813246481' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='17' src='192.168.1.105' sport='51578' dst='68.71.209.195' dport='80' begin='1484596073.942082999' duration='0.002323001' filepos='65066'>
+  <stream dir='0' ndata='2' nack='4' beginseq='3247194008' seqlen='515' mtu='566' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2964836033' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='81' src='192.168.1.105' sport='51670' dst='23.197.50.83' dport='80' begin='1484596109.456485999' duration='48.873470001' filepos='315885'>
+  <stream dir='0' ndata='18' nack='82' beginseq='2389524283' seqlen='7015' mtu='570' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3481272690' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='18' src='192.168.1.105' sport='51579' dst='104.82.32.203' dport='443' begin='1484596073.942263999' duration='0.003591001' filepos='65304'>
+  <stream dir='0' ndata='4' nack='16' beginseq='248365879' seqlen='2248' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2441997705' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='82' src='192.168.1.105' sport='51671' dst='23.197.50.83' dport='80' begin='1484596116.456840999' duration='41.048899001' filepos='347359'>
+  <stream dir='0' ndata='10' nack='39' beginseq='2028078470' seqlen='2632' mtu='520' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2842924709' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='19' src='192.168.1.105' sport='51580' dst='31.13.77.12' dport='80' begin='1484596073.942287999' duration='0.001533001' filepos='65398'>
+  <stream dir='0' ndata='2' nack='2' beginseq='1852720655' seqlen='448' mtu='499' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1292511225' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='83' src='192.168.1.105' sport='51672' dst='23.197.50.83' dport='80' begin='1484596116.456857999' duration='41.048875001' filepos='347453'>
+  <stream dir='0' ndata='9' nack='42' beginseq='1639745513' seqlen='2595' mtu='484' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='881250300' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='20' src='192.168.1.105' sport='51581' dst='23.197.50.89' dport='80' begin='1484596073.942385999' duration='0.001420001' filepos='65965'>
+  <stream dir='0' ndata='1' nack='10' beginseq='1248897633' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1510998159' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='84' src='192.168.1.105' sport='51673' dst='23.197.50.83' dport='80' begin='1484596116.456873999' duration='41.048862001' filepos='347547'>
+  <stream dir='0' ndata='13' nack='79' beginseq='1013684458' seqlen='4253' mtu='529' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3262454301' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='21' src='192.168.1.105' sport='51582' dst='199.96.57.6' dport='443' begin='1484596073.942404999' duration='0.002639001' filepos='66059'>
+  <stream dir='0' ndata='6' nack='6' beginseq='2837687396' seqlen='1185' mtu='581' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2019764225' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='85' src='192.168.1.105' sport='51674' dst='66.235.139.14' dport='80' begin='1484596118.456104999' duration='0.000487001' filepos='350750'>
+  <stream dir='0' ndata='7' nack='3' beginseq='3182245130' seqlen='6195' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2972028830' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='22' src='192.168.1.105' sport='51583' dst='65.74.147.165' dport='80' begin='1484596073.944426999' duration='0.001846001' filepos='70086'>
+  <stream dir='0' ndata='1' nack='4' beginseq='359645497' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2686512967' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='86' src='192.168.1.105' sport='51675' dst='68.71.212.43' dport='80' begin='1484596118.456312999' duration='30.274244001' filepos='354427'>
+  <stream dir='0' ndata='6' nack='3' beginseq='4104482239' seqlen='3149' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3043667065' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='23' src='192.168.1.105' sport='51584' dst='172.217.6.66' dport='443' begin='1484596073.946294999' duration='1.980467001' filepos='76202'>
+  <stream dir='0' ndata='15' nack='27' beginseq='2806248768' seqlen='3335' mtu='1270' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1117335967' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='87' src='192.168.1.105' sport='51681' dst='104.82.35.20' dport='443' begin='1484596118.456705999' duration='32.020831001' filepos='362597'>
+  <stream dir='0' ndata='12' nack='6' beginseq='1358948276' seqlen='1054' mtu='569' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2846298551' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='24' src='192.168.1.105' sport='51585' dst='65.74.147.165' dport='80' begin='1484596073.946630999' duration='0.978779001' filepos='77116'>
+  <stream dir='0' ndata='14' nack='12' beginseq='1321427773' seqlen='2985' mtu='282' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1630908838' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='88' src='192.168.1.105' sport='51659' dst='35.163.113.182' dport='80' begin='1484596124.383870999' duration='0.679530001' filepos='377808'>
+  <stream dir='0' ndata='3' nack='3' beginseq='234374797' seqlen='3' mtu='52'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2502125690' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='25' src='192.168.1.105' sport='51586' dst='104.82.32.203' dport='443' begin='1484596073.946757999' duration='0.002147001' filepos='77921'>
+  <stream dir='0' ndata='7' nack='10' beginseq='3962651746' seqlen='2882' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2428870867' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='89' src='192.168.1.105' sport='51689' dst='23.197.50.83' dport='80' begin='1484596125.603421999' duration='32.726538001' filepos='383044'>
+  <stream dir='0' ndata='3' nack='15' beginseq='393533590' seqlen='488' mtu='538' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1664821756' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='26' src='192.168.1.105' sport='51587' dst='104.82.32.203' dport='443' begin='1484596073.947440999' duration='0.977630001' filepos='79884'>
+  <stream dir='0' ndata='7' nack='16' beginseq='1548368412' seqlen='2643' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2418394093' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='90' src='192.168.1.105' sport='51690' dst='23.197.50.83' dport='80' begin='1484596125.603677999' duration='31.902080001' filepos='384798'>
+  <stream dir='0' ndata='4' nack='10' beginseq='500850560' seqlen='436' mtu='485' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1618397724' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='27' src='192.168.1.105' sport='51588' dst='17.110.234.28' dport='443' begin='1484596073.948935999' duration='0.976396001' filepos='87991'>
+  <stream dir='0' ndata='7' nack='8' beginseq='2372433082' seqlen='2030' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2787024352' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='91' src='192.168.1.105' sport='51691' dst='23.197.50.83' dport='80' begin='1484596125.603685999' duration='31.902060001' filepos='384892'>
+  <stream dir='0' ndata='3' nack='11' beginseq='1250466136' seqlen='3' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3394744198' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='28' src='192.168.1.105' sport='51589' dst='17.110.234.28' dport='443' begin='1484596074.925364999' duration='0.000414001' filepos='97257'>
+  <stream dir='0' ndata='10' nack='8' beginseq='557694169' seqlen='7764' mtu='1477' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1670778738' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='92' src='192.168.1.105' sport='51692' dst='23.197.50.83' dport='80' begin='1484596125.603719999' duration='32.726244001' filepos='385174'>
+  <stream dir='0' ndata='7' nack='20' beginseq='2949610007' seqlen='486' mtu='532' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2129713041' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='29' src='192.168.1.105' sport='51590' dst='68.71.222.248' dport='80' begin='1484596074.925849999' duration='0.000290001' filepos='108145'>
+  <stream dir='0' ndata='7' nack='2' beginseq='4062605442' seqlen='8122' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1245660890' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='93' src='192.168.1.105' sport='51693' dst='23.197.50.83' dport='80' begin='1484596125.603771999' duration='31.901977001' filepos='386342'>
+  <stream dir='0' ndata='7' nack='15' beginseq='1804648076' seqlen='486' mtu='532' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='251513274' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='30' src='192.168.1.105' sport='51591' dst='68.71.212.43' dport='443' begin='1484596074.925854999' duration='1.000979001' filepos='108239'>
+  <stream dir='0' ndata='9' nack='10' beginseq='3386659691' seqlen='3953' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3054686384' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='94' src='192.168.1.105' sport='51694' dst='23.197.50.83' dport='80' begin='1484596125.604028999' duration='32.725939001' filepos='391484'>
+  <stream dir='0' ndata='4' nack='28' beginseq='2632606385' seqlen='522' mtu='571' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='762878973' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='31' src='192.168.1.105' sport='51592' dst='23.209.176.32' dport='443' begin='1484596074.925865999' duration='1.000978001' filepos='108427'>
+  <stream dir='0' ndata='5' nack='115' beginseq='339079873' seqlen='1488' mtu='971' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1348420426' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='95' src='192.168.1.105' sport='51695' dst='23.197.50.83' dport='80' begin='1484596125.604035999' duration='31.901719001' filepos='391578'>
+  <stream dir='0' ndata='4' nack='9' beginseq='2185193916' seqlen='436' mtu='485' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='4074642267' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='32' src='192.168.1.105' sport='51593' dst='31.13.77.36' dport='443' begin='1484596074.926115999' duration='1.000740001' filepos='118371'>
+  <stream dir='0' ndata='11' nack='28' beginseq='602791715' seqlen='1209' mtu='408' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='820951855' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='96' src='192.168.1.105' sport='51696' dst='23.197.50.83' dport='80' begin='1484596125.604049999' duration='31.901711001' filepos='391754'>
+  <stream dir='0' ndata='4' nack='17' beginseq='1849860080' seqlen='485' mtu='534' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='852720673' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='33' src='192.168.1.105' sport='51594' dst='31.13.77.12' dport='80' begin='1484596074.927525999' duration='1.996644001' filepos='127576'>
+  <stream dir='0' ndata='2' nack='14' beginseq='1446559472' seqlen='522' mtu='573' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3479386595' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='97' src='192.168.1.105' sport='51697' dst='23.197.50.83' dport='80' begin='1484596125.604099999' duration='32.725852001' filepos='392212'>
+  <stream dir='0' ndata='3' nack='47' beginseq='1703845844' seqlen='479' mtu='529' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2778893154' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='34' src='192.168.1.105' sport='51595' dst='31.13.77.12' dport='443' begin='1484596074.927530999' duration='1.001020001' filepos='127670'>
+  <stream dir='0' ndata='10' nack='21' beginseq='2914447256' seqlen='866' mtu='371' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='970277841' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='98' src='192.168.1.105' sport='51698' dst='23.197.50.83' dport='80' begin='1484596125.604105999' duration='31.901646001' filepos='392306'>
+  <stream dir='0' ndata='3' nack='7' beginseq='3347830926' seqlen='414' mtu='464' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='4290731881' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='35' src='192.168.1.105' sport='51596' dst='23.197.50.83' dport='80' begin='1484596075.925625999' duration='0.001774001' filepos='136801'>
+  <stream dir='0' ndata='3' nack='2' beginseq='1225174908' seqlen='591' mtu='347' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3376600886' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='99' src='192.168.1.105' sport='51699' dst='23.197.50.107' dport='80' begin='1484596125.604321999' duration='0.000000001' filepos='393710'>
+  <stream dir='0' ndata='1' nack='0' beginseq='2599996328' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='36' src='192.168.1.105' sport='51597' dst='31.13.77.12' dport='80' begin='1484596075.927089999' duration='0.001473001' filepos='142811'>
+  <stream dir='0' ndata='2' nack='8' beginseq='3798730703' seqlen='492' mtu='543' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1937592403' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='100' src='192.168.1.105' sport='51700' dst='23.197.50.107' dport='80' begin='1484596125.604395999' duration='0.000000001' filepos='394832'>
+  <stream dir='0' ndata='1' nack='0' beginseq='762538041' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='37' src='192.168.1.105' sport='51598' dst='205.185.208.127' dport='443' begin='1484596075.928975999' duration='0.995185001' filepos='147816'>
+  <stream dir='0' ndata='3' nack='1' beginseq='795793109' seqlen='233' mtu='283' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='698539093' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='101' src='192.168.1.105' sport='51701' dst='23.197.50.107' dport='80' begin='1484596125.604402999' duration='0.000000001' filepos='394926'>
+  <stream dir='0' ndata='1' nack='0' beginseq='45126555' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='38' src='192.168.1.105' sport='51599' dst='17.248.128.235' dport='443' begin='1484596075.929003999' duration='0.995196001' filepos='148004'>
+  <stream dir='0' ndata='3' nack='1' beginseq='1459484775' seqlen='243' mtu='293' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2326386059' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='102' src='192.168.1.105' sport='51702' dst='23.197.50.107' dport='80' begin='1484596125.604449999' duration='0.000000001' filepos='395020'>
+  <stream dir='0' ndata='1' nack='0' beginseq='3404748963' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='39' src='192.168.1.100' sport='7000' dst='192.168.1.101' dport='58641' begin='1484596076.924293999' duration='0.000093001' filepos='149074'>
+  <stream dir='0' ndata='3' nack='3' beginseq='3562718435' seqlen='1200' mtu='1250' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='560299025' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='103' src='192.168.1.105' sport='51703' dst='23.197.50.107' dport='80' begin='1484596125.604455999' duration='0.000000001' filepos='395114'>
+  <stream dir='0' ndata='1' nack='0' beginseq='1761707636' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='40' src='192.168.1.105' sport='51628' dst='104.82.35.33' dport='80' begin='1484596083.924377999' duration='1.000004001' filepos='152444'>
+  <stream dir='0' ndata='4' nack='4' beginseq='3162424368' seqlen='254' mtu='178' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2176489659' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='104' src='192.168.1.105' sport='51704' dst='23.197.50.107' dport='80' begin='1484596125.604462999' duration='0.000000001' filepos='395208'>
+  <stream dir='0' ndata='1' nack='0' beginseq='2974164192' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='41' src='192.168.1.105' sport='51600' dst='23.209.176.32' dport='443' begin='1484596087.924339999' duration='30.532331001' filepos='157053'>
+  <stream dir='0' ndata='4' nack='2' beginseq='1835774672' seqlen='436' mtu='269' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1359630800' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='105' src='192.168.1.105' sport='51705' dst='23.197.50.107' dport='80' begin='1484596125.604468999' duration='0.000000001' filepos='395302'>
+  <stream dir='0' ndata='1' nack='0' beginseq='2837710064' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='42' src='192.168.1.105' sport='51629' dst='169.54.33.198' dport='80' begin='1484596087.924722999' duration='64.018129001' filepos='157909'>
+  <stream dir='0' ndata='14' nack='10' beginseq='1764747206' seqlen='5022' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='936586314' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='106' src='192.168.1.105' sport='51706' dst='23.197.50.107' dport='80' begin='1484596125.604475999' duration='0.000000001' filepos='395396'>
+  <stream dir='0' ndata='1' nack='0' beginseq='4053109976' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='43' src='192.168.1.105' sport='51630' dst='169.54.33.198' dport='80' begin='1484596087.924751999' duration='30.532221001' filepos='158003'>
+  <stream dir='0' ndata='4' nack='4' beginseq='3410541578' seqlen='2000' mtu='1039' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3856179331' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='107' src='192.168.1.105' sport='51707' dst='23.197.50.107' dport='80' begin='1484596125.604721999' duration='0.000000001' filepos='399543'>
+  <stream dir='0' ndata='1' nack='0' beginseq='1278392656' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='44' src='192.168.1.105' sport='51631' dst='199.181.133.24' dport='443' begin='1484596087.924778999' duration='30.532017001' filepos='158097'>
+  <stream dir='0' ndata='9' nack='8' beginseq='377550643' seqlen='1527' mtu='1001' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3058453149' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='108' src='192.168.1.105' sport='51708' dst='23.197.50.107' dport='80' begin='1484596125.604733999' duration='0.000000001' filepos='399719'>
+  <stream dir='0' ndata='1' nack='0' beginseq='3825536381' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='45' src='192.168.1.105' sport='51632' dst='169.54.33.198' dport='80' begin='1484596087.924854999' duration='30.532126001' filepos='158379'>
+  <stream dir='0' ndata='5' nack='3' beginseq='2496898607' seqlen='2231' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='887443646' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='109' src='192.168.1.100' sport='7000' dst='192.168.1.101' dport='58646' begin='1484596146.436674999' duration='0.000457001' filepos='573471'>
+  <stream dir='0' ndata='1' nack='1' beginseq='3963257661' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2465176934' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='46' src='192.168.1.105' sport='51633' dst='151.101.40.68' dport='443' begin='1484596087.925014999' duration='30.531660001' filepos='158963'>
+  <stream dir='0' ndata='8' nack='11' beginseq='1991185239' seqlen='2038' mtu='891' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3576637163' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='110' src='192.168.1.103' sport='49233' dst='173.209.242.110' dport='443' begin='1484596151.369135999' duration='0.000005001' filepos='575189'>
+  <stream dir='0' ndata='2' nack='0' beginseq='483546276' seqlen='2' mtu='41'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3527306374' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='47' src='192.168.1.105' sport='51634' dst='35.161.148.31' dport='80' begin='1484596087.925076999' duration='17.531198001' filepos='159235'>
+  <stream dir='0' ndata='9' nack='6' beginseq='524851870' seqlen='850' mtu='505' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3314525214' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='111' src='192.168.1.105' sport='51714' dst='23.210.227.194' dport='443' begin='1484596215.556489999' duration='45.000045001' filepos='634276'>
+  <stream dir='0' ndata='10' nack='6' beginseq='3327458877' seqlen='5008' mtu='1500' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3306091992' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='48' src='192.168.1.105' sport='51635' dst='54.191.235.86' dport='9571' begin='1484596087.926186999' duration='6.531121001' filepos='167391'>
+  <stream dir='0' ndata='9' nack='15' beginseq='2726103430' seqlen='756' mtu='590' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3490269682' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='112' src='192.168.1.100' sport='7000' dst='192.168.1.101' dport='58651' begin='1484596216.556638999' duration='0.000000001' filepos='638059'>
+  <stream dir='0' ndata='1' nack='0' beginseq='1659453085' seqlen='1' mtu='52'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3924855136' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='49' src='192.168.1.105' sport='51636' dst='23.210.223.68' dport='443' begin='1484596087.927760999' duration='31.591706001' filepos='172316'>
+  <stream dir='0' ndata='8' nack='228' beginseq='1691975691' seqlen='943' mtu='557' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1898783887' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='113' src='192.168.1.105' sport='51715' dst='50.19.83.4' dport='80' begin='1484596228.556373999' duration='30.000206001' filepos='639217'>
+  <stream dir='0' ndata='3' nack='3' beginseq='1849664576' seqlen='967' mtu='1017' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2788595074' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='50' src='192.168.1.105' sport='51637' dst='23.210.223.68' dport='443' begin='1484596088.156888999' duration='32.736158001' filepos='175076'>
+  <stream dir='0' ndata='6' nack='252' beginseq='2711753506' seqlen='769' mtu='557' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1899478960' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='114' src='192.168.1.105' sport='51716' dst='169.54.33.137' dport='80' begin='1484596257.556294999' duration='0.999929001' filepos='644229'>
+  <stream dir='0' ndata='2' nack='2' beginseq='342932496' seqlen='2529' mtu='1500'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2479638910' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='51' src='192.168.1.105' sport='51638' dst='52.32.210.93' dport='443' begin='1484596088.160137999' duration='32.732928001' filepos='176582'>
+  <stream dir='0' ndata='8' nack='9' beginseq='2957107054' seqlen='1335' mtu='545' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2922937959' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='115' src='192.168.1.105' sport='51717' dst='23.197.50.83' dport='80' begin='1484596261.557036999' duration='0.999811001' filepos='647489'>
+  <stream dir='0' ndata='2' nack='14' beginseq='2953925899' seqlen='473' mtu='524' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='2298290017' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='52' src='192.168.1.105' sport='51639' dst='169.47.30.64' dport='443' begin='1484596088.160162999' duration='24.296617001' filepos='176758'>
+  <stream dir='0' ndata='10' nack='8' beginseq='753995859' seqlen='901' mtu='307' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1741449305' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='116' src='192.168.1.105' sport='51718' dst='23.197.50.83' dport='80' begin='1484596262.556928999' duration='0.000164001' filepos='649285'>
+  <stream dir='0' ndata='2' nack='4' beginseq='2391065693' seqlen='434' mtu='485' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='753204717' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='53' src='192.168.1.105' sport='51640' dst='199.58.87.99' dport='443' begin='1484596088.161415999' duration='7.296740001' filepos='178755'>
+  <stream dir='0' ndata='11' nack='6' beginseq='3004898078' seqlen='1853' mtu='541' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1498518571' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='117' src='192.168.1.105' sport='51719' dst='23.197.50.83' dport='80' begin='1484596262.556943999' duration='0.000854001' filepos='649379'>
+  <stream dir='0' ndata='2' nack='12' beginseq='1412987200' seqlen='433' mtu='484' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3472004344' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='54' src='192.168.1.105' sport='51641' dst='104.82.65.63' dport='443' begin='1484596088.162074999' duration='31.357722001' filepos='179635'>
+  <stream dir='0' ndata='7' nack='8' beginseq='3038090380' seqlen='1444' mtu='851' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1351778803' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='55' src='192.168.1.105' sport='51642' dst='207.244.86.68' dport='443' begin='1484596088.372251999' duration='0.000000001' filepos='184806'>
+  <stream dir='0' ndata='1' nack='0' beginseq='3431854479' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='56' src='192.168.1.105' sport='51643' dst='64.202.112.12' dport='443' begin='1484596088.373413999' duration='2.086101001' filepos='186947'>
+  <stream dir='0' ndata='10' nack='8' beginseq='3905076437' seqlen='1067' mtu='662' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='1058049864' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='57' src='192.168.1.105' sport='51644' dst='207.244.73.101' dport='443' begin='1484596088.374449999' duration='0.000094001' filepos='189161'>
+  <stream dir='0' ndata='2' nack='0' beginseq='1010655868' seqlen='2' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='58' src='192.168.1.105' sport='51645' dst='64.202.112.8' dport='443' begin='1484596088.599010999' duration='0.000000001' filepos='194727'>
+  <stream dir='0' ndata='1' nack='0' beginseq='1696717142' seqlen='1' mtu='64' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='0' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='59' src='192.168.1.105' sport='51646' dst='23.197.50.98' dport='80' begin='1484596088.599074999' duration='37.359603001' filepos='194903'>
+  <stream dir='0' ndata='7' nack='57' beginseq='3641730549' seqlen='958' mtu='562' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3849273860' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='60' src='192.168.1.105' sport='51647' dst='169.47.30.64' dport='443' begin='1484596089.459254999' duration='22.997042001' filepos='223806'>
+  <stream dir='0' ndata='9' nack='10' beginseq='3181994617' seqlen='2196' mtu='1108' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='775697047' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='61' src='192.168.1.105' sport='51648' dst='52.24.203.21' dport='443' begin='1484596089.467105999' duration='31.425924001' filepos='232336'>
+  <stream dir='0' ndata='10' nack='15' beginseq='1592839424' seqlen='2374' mtu='559' sentsackok='yes'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='3167076399' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+<flow aggregate='62' src='192.168.1.105' sport='51649' dst='23.21.80.73' dport='80' begin='1484596092.456284999' duration='122.100126001' filepos='249068'>
+  <stream dir='0' ndata='7' nack='12' beginseq='4221568297' seqlen='5829' mtu='1033'>
+  </stream>
+  <stream dir='1' ndata='0' nack='0' beginseq='4075271308' seqlen='0' mtu='0'>
+  </stream>
+</flow>
+
+</trace>

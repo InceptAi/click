@@ -1,0 +1,46 @@
+<?xml version='1.0' standalone='yes'?>
+<trace file='examples/sample.dump'>
+
+<flow aggregate='1' src='146.164.69.8' sport='33397' dst='192.150.187.11' dport='80' begin='1028667433.955909999' duration='131.647560001' filepos='24'>
+  <rtt source='syn' value='0.209878' />
+  <rtt source='min' value='0.184903' />
+  <rtt source='avg' value='0.337215' />
+  <rtt source='max' value='2.4915' />
+  <stream dir='0' ndata='3' nack='1508' beginseq='1543502210' seqlen='748' mtu='430' sentsackok='yes'>
+    <semirtt source='syn' value='0.000235' />
+    <semirtt source='min' value='0.000235' />
+    <semirtt source='avg' value='0.00491' n='3' />
+    <semirtt source='max' value='0.0123' />
+    <semirtt source='var' value='4.19195e-05' n='3' />
+  </stream>
+  <stream dir='1' ndata='2487' nack='0' beginseq='2831743689' seqlen='3548305' mtu='1500'>
+    <semirtt source='syn' value='0.209643' />
+    <semirtt source='min' value='0.184668' />
+    <semirtt source='avg' value='0.332305' n='1210' />
+    <semirtt source='max' value='2.4792' />
+    <semirtt source='var' value='0.0228832' n='1210' />
+  </stream>
+</flow>
+
+<flow aggregate='2' src='203.167.213.81' sport='23568' dst='192.150.187.11' dport='80' begin='1028686953.640701999' duration='45.544053001' filepos='346485'>
+  <rtt source='syn' value='0.157749' />
+  <rtt source='min' value='0.15767' />
+  <rtt source='avg' value='0.42622' />
+  <rtt source='max' value='1.63466' />
+  <stream dir='0' ndata='3' nack='63' beginseq='3453338283' seqlen='486' mtu='524' sentsackok='yes'>
+    <semirtt source='syn' value='0.000224' />
+    <semirtt source='min' value='0.000145' />
+    <semirtt source='avg' value='0.000874667' n='3' />
+    <semirtt source='max' value='0.002255' />
+    <semirtt source='var' value='1.43055e-06' n='3' />
+  </stream>
+  <stream dir='1' ndata='110' nack='1' beginseq='3034663568' seqlen='159102' mtu='1500'>
+    <semirtt source='syn' value='0.157525' />
+    <semirtt source='min' value='0.157525' />
+    <semirtt source='avg' value='0.425345' n='27' />
+    <semirtt source='max' value='1.6324' />
+    <semirtt source='var' value='0.238534' n='27' />
+  </stream>
+</flow>
+
+</trace>

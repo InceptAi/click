@@ -1,0 +1,3670 @@
+#!/usr/bin/env python
+
+from __future__ import generators
+import sys, os, re, types, string, struct, gzip, array
+from bisect import bisect
+from math import *
+import gtk, gobject, pango, xml.parsers.expat, getopt
+KEY_ESCAPE = 0xFF1B
+
+class LineDescriptor:
+    def __init__(self, r, g, b, **args):
+        self.red = r
+        self.green = g
+        self.blue = b
+        self.attrs = args
+    def __getattr__(self, name):
+        if name in self.attrs:
+            return self.attrs[name]
+        elif name == "dash":
+            return []
+        elif name == "linewidth":
+            return 1
+
+_screen_style = {
+    "data": LineDescriptor(1, 0, 0),
+    "data.undelivered": LineDescriptor(0, 0, 0),
+    "ack": LineDescriptor(0.42, 0.56, 0.14),
+    "dataack": LineDescriptor(0, 0, 1),
+    "window": LineDescriptor(0.8, 0.8, 1, linewidth=2),
+    
+    "loss": LineDescriptor(1, 0.84, 0),
+    "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
+    "ploss": LineDescriptor(0.56, 0.74, 0.56),
+    "ploss.bg": LineDescriptor(0.66, 0.9, 0.66),
+    "floss": LineDescriptor(0.8, 0.8, 0.8),
+    "floss.bg": LineDescriptor(0.9, 0.9, 0.9),
+    "lossborder": LineDescriptor(1, 1, 0, dash=[4, 4]),
+
+    "border": LineDescriptor(0.66, 0.66, 0.66),
+    "bg": LineDescriptor(1, 1, 1),
+    "label": LineDescriptor(0.4, 0.4, 0.4),
+    "link": LineDescriptor(0.7, 0.7, 0.7),
+
+    "H": LineDescriptor(1, 0.9, 0, linewidth=2),
+    "H.cause": LineDescriptor(1, 200/255., 200/255.),
+    "H.effect": LineDescriptor(200/255., 1, 200/255.),
+    "H.dup": LineDescriptor(0.9, 0.9, 0.9),
+    "H.link": LineDescriptor(1, 1, 0.6)
+    }
+
+_postscript_style = {
+    "bg": None,
+    
+    "data": LineDescriptor(1, 0, 0, linewidth=0.5, mpstyle=" Sdata"),
+    "data.undelivered": LineDescriptor(0, 0, 0, linewidth=0.5, mpstyle=" Sdataundelivered"),
+    "ack": LineDescriptor(0.42, 0.56, 0.14, linewidth=0.5, mpstyle=" Sack"),
+    "dataack": LineDescriptor(0, 0, 1, linewidth=0.5, mpstyle=" Sdataack"),
+    "window": LineDescriptor(0.8, 0.8, 1, linewidth=1.5),
+    
+    "loss": LineDescriptor(1, 0.84, 0),
+    "loss.bg": LineDescriptor(0.94, 0.90, 0.55),
+    "ploss": LineDescriptor(0.56, 0.74, 0.56),
+    "ploss.bg": LineDescriptor(0.66, 0.9, 0.66),
+    "floss": LineDescriptor(0.8, 0.8, 0.8),
+    "floss.bg": LineDescriptor(0.9, 0.9, 0.9),
+    "lossborder": LineDescriptor(1, 1, 0, dash=[4, 4]),
+
+    "border": LineDescriptor(0, 0, 0),
+    "bg": LineDescriptor(1, 1, 1),
+    "label": LineDescriptor(0, 0, 0),
+    "link": LineDescriptor(0.7, 0.7, 0.7, dash=[4, 4])
+    }
+
+PRINT_PRINTER = 0
+PRINT_FILE = 1
+PRINT_EPSFILE = 2
+PRINT_MPFILE = 3
+_print_options = {
+    "dest": PRINT_PRINTER,
+    "file": "x.ps",
+    "command": "lpr",
+    "papersize": (612, 792),
+    "landscape": True,
+    "color": True,
+    "margins": (28, 28, 28, 28),         # left, top, right, bottom
+    "links": True,
+    "rcvwnd": True
+    }
+
+
+def frange(start, stop, step):
+    i = 0
+    while True:
+        pos = start + i * step
+        if pos > stop:
+            break
+        yield pos
+        i += 1
+
+def fix_range(a, b, min_step_frac):
+    d = b - a
+    step = 10 ** floor(log10(d))
+
+    # make step bigger if required
+    if step / d > 0.5 and step / d >= min_step_frac:
+        if step/5 / d >= min_step_frac:
+            step /= 5
+        elif step/2.5 / d >= min_step_frac:
+            step /= 2.5
+        elif step/2 / d >= min_step_frac:
+            step /= 2
+    while step < d and step / d < min_step_frac:
+        if 2*step / d >= min_step_frac:
+            step *= 2
+        elif 2.5*step / d >= min_step_frac:
+            step *= 2.5
+        elif 5*step / d >= min_step_frac:
+            step *= 5
+        else:
+            step *= 10
+    if step >= d:
+        step = d
+
+    # bound a and b to multiples of step, if appropriate
+    a_try = floor(a / step) * step
+    if a - a_try < 0.1*d:
+        a = a_try; d = b - a
+    b_try = ceil(b / step) * step
+    if b_try - b < 0.1*d:
+        b = b_try
+    
+    # return a dictionary
+    return { "low": a, "high": b, "step": step }
+
+def uncompressed_file(f):
+    if type(f) is types.StringType:
+        f = file(f, "rb")
+    twochars = f.read(2)
+    f.seek(0)
+    if twochars == "\037\235" or twochars == "\037\213":
+        return gzip.GzipFile(fileobj=f)
+    else:
+        return f
+
+def stock_image(stock_id):
+    image = gtk.Image()
+    image.set_from_stock(stock_id, gtk.ICON_SIZE_SMALL_TOOLBAR)
+    return image
+
+def file_image(filename):
+    image = gtk.Image()
+    image.set_from_file(filename)
+    return image
+
+def bisect_with_cmp(list, cmp, lo=0, hi=None):
+    if hi is None: hi = len(list)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if cmp(list[mid]) < 0: hi = mid
+        else: lo = mid + 1
+    return lo
+
+def union_rectangle(r1, r2):
+    if r1 is None or r1[2] <= 0 or r1[3] <= 0: return r2
+    if r2 is None or r2[2] <= 0 or r2[3] <= 0: return r1
+    x, y = min(r1[0], r2[0]), min(r1[1], r2[1])
+    return (x, y, max(r1[0] + r1[2], r2[0] + r2[2]) - x, max(r1[1] + r1[3], r2[1] + r2[3]) - y)
+
+def expand_rectangle(r1, v):
+    if r1 is None or r1[2] <= 0 or r1[3] <= 0: return r1
+    return (r1[0] - v, r1[1] - v, r1[2] + 2*v, r1[3] + 2*v)
+
+def ordinal(n):
+    dig = abs(n) % 10
+    if abs(n) >= 10 and abs(n) <= 19: dig = 4
+    if dig == 1: return str(n) + "st"
+    elif dig == 2: return str(n) + "nd"
+    elif dig == 3: return str(n) + "rd"
+    else: return str(n) + "th"
+
+def seqadj(seq, adj):
+    if seq < adj:
+        return seq - adj + 4294967296
+    else:
+        return seq - adj
+
+def unparse_tcp_flags(flags):
+    return ("", "F", "S", "FS", "R", "FR", "SR", "FSR",
+            "P", "FP", "SP", "FSP", "RP", "FRP", "SRP", "FSRP")[flags & 15] \
+        + ("", "A", "U", "AU", "E", "AE", "UE", "AUE",
+           "W", "AW", "UW", "AUW", "EW", "AEW", "UEW", "AUEW")[(flags >> 4) & 15]
+
+TH_FIN = 0x01
+TH_SYN = 0x02
+TH_RST = 0x04
+TH_PUSH = 0x08
+TH_ACK = 0x10
+TH_URG = 0x20
+TH_ECE = 0x40
+TH_CWR = 0x80
+TH_UNDELIVERED = 0x1000
+th_parse = array.array('B', [0] * 256)
+for c, f in [('F', TH_FIN), ('S', TH_SYN), ('R', TH_RST), ('P', TH_PUSH),
+             ('A', TH_ACK), ('U', TH_URG), ('E', TH_ECE), ('W', TH_CWR)]:
+    th_parse[ord(c)] = f
+
+def parse_tcp_flags(f):
+    if f == "A":
+        return TH_ACK
+    elif f == "PA":
+        return TH_PUSH | TH_ACK
+    else:
+        r = 0
+        for c in f:
+            r |= th_parse[ord(c)]
+        return r
+
+def unparse_ip(ip):
+    return "%d.%d.%d.%d" % ((ip >> 24) & 255, (ip >> 16) & 255, (ip >> 8) & 255, ip & 255)
+
+def parse_ip(ip):
+    p1 = ip.find('.')
+    p2 = ip.find('.', p1 + 1)
+    p3 = ip.find('.', p2 + 1)
+    return (long(ip[:p1]) << 24) + (int(ip[p1+1:p2]) << 16) + (int(ip[p2+1:p3]) << 8) + int(ip[p3+1:])
+
+def remove_duplicates(l):
+    l.sort()
+    delta = 0
+    i = 1
+    while i < len(l):
+        if l[i - delta - 1] == l[i]:
+            delta += 1
+        elif delta > 0:
+            l[i - delta] = l[i]
+        i += 1
+    del l[len(l) - delta:]
+
+_nidle = 0; _idle_dict = { }
+
+def idle_add(f, *args):
+    global _nidle
+    what = gobject.idle_add(idle_run, _nidle)
+    _idle_dict[_nidle] = (f, args, what)
+    _nidle += 1
+    return _nidle - 1
+
+def idle_run(num):
+    f, args, what = _idle_dict[num]
+    f2 = f(*args)
+    if f2 is None:
+        gobject.source_remove(what)
+        del _idle_dict[num]
+        return False
+    else:
+        _idle_dict[num] = f2, args, what
+        return True
+
+def idle_complete(num):
+    if num is not None:
+        f, args, what = _idle_dict[num]
+        gtk.idle_remove(what)
+        while f is not None:
+            f = f(*args)
+        del _idle_dict[num]
+
+def idle_remove(num):
+    if num is not None:
+        f, args, what = _idle_dict[num]
+        gtk.idle_remove(what)
+        del _idle_dict[num]
+
+
+####################
+# packets and loss events
+#
+
+class Packet(object):
+    __slots__ = ['time', 'seq', 'last_seq', 'ack', 'flags', 'dup_count', 'window', 'anno']
+    def __init__(self, time, flags, seq, payloadlen, ack, window=0):
+        self.time = time
+        self.seq = seq
+        self.last_seq = self.seq + payloadlen
+        self.ack = ack
+        self.flags = flags
+        self.last_seq += ((flags & TH_SYN) != 0) + ((flags & TH_FIN) != 0)
+        self.dup_count = 0
+        self.window = window
+        self.anno = None
+    def pure_ack(self):
+        return self.seq == self.last_seq
+    def has_data(self):
+        return self.seq != self.last_seq
+    def adjust(self, time_adj, seq_adj, ack_adj):
+        self.time -= time_adj
+        self.seq = seqadj(self.seq, seq_adj)
+        self.last_seq = seqadj(self.last_seq, seq_adj)
+        if self.ack != 0: self.ack = seqadj(self.ack, ack_adj)
+    def __cmp__(self, other):
+        return cmp(self.time, other.time)
+    def __str__(self):
+        result = "[" + str(self.time) + " "
+        if self.pure_ack():
+            result += "A" + str(self.ack)
+        else:
+            result += str(self.seq) + ":" + str(self.last_seq)
+        return result + "]"
+
+class PacketAnno(object):
+    __slots__ = ['packet', 'graphmarkup', 'graphanchor', 'next']
+    def __init__(self, packet, graphmarkup, graphanchor):
+        self.packet = packet
+        self.graphmarkup = graphmarkup
+        self.graphanchor = graphanchor
+        self.next = None
+
+class LossEvent:
+    def __init__(self, type, begin, seq, end, end_seq):
+        self.type, self.begin, self.seq, self.end, self.end_seq = \
+                   type, float(begin), float(seq), float(end), float(end_seq)
+    def time_overlaps(self, begin, end):
+        return (begin is None or self.end >= begin) and (end is None or end >= self.begin);
+
+class PacketLink:
+    def __init__(self, t0, s0, t1, s1):
+        if t0 > t1:
+            self.t0, self.s0, self.t1, self.s1 = t1, s1, t0, s0
+        else:
+            self.t0, self.s0, self.t1, self.s1 = t0, s0, t1, s1
+    def time_overlaps(self, begin, end):
+        return (begin is None or self.t1 >= begin) and (end is None or end >= self.t0)
+    def fix(self, conn, dir):
+        if self.s0 is None:
+            p = conn.find_packet(self.t0, dir)
+            if p is not None:
+                self.s0 = (p.seq + p.last_seq) // 2
+        if self.s1 is None:
+            p = conn.find_packet(self.t1, dir)
+            if p is not None:
+                self.s1 = (p.seq + p.last_seq) // 2
+    def __str__(self):
+        return "[" + str(self.t0) + "," + str(self.s0) + " - " + str(self.t1) + "," + str(self.s1) + "]"
+
+
+####################
+# connections and flowrefs
+#
+
+class PulseProcess(Exception):
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
+class ConnectionFormatError(Exception):
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
+class ConnectionFileCompressedError(ConnectionFormatError):
+    def __init__(self, s=""):
+        self.str = s
+    def __str__(self):
+        return `self.str`
+
+def direction(dir):
+    if dir == '>':
+        return 0
+    elif dir == '<':
+        return 1
+    elif dir is True:
+        return 0
+    elif dir is False:
+        return 1
+    elif int(dir) == 0 or int(dir) == 1:
+        return int(dir)
+    else:
+        raise ConnectionFormatError, "bad direction " + `dir`
+
+class Connection(object):
+
+    __slots__ = ['s', 'loss', 'available', 'dynload', 'flowid', 'aggregate', 'loss_count', 'has_window', 'filename', 'filepos', 'endtime', 'link', 'undelivered']
+
+    def __init__(self, filename=None, dynload=False, aggregate=-1, src=None, sport=None, dst=None, dport=None, filepos=None, endtime=None):
+        self.s = ([], [])
+        self.loss = ([], [])
+        self.link = ([], [])
+        self.undelivered = ([], [])
+        self.available = False
+        self.dynload = dynload
+        if src is not None:
+            self.flowid = (src, int(sport), dst, int(dport))
+        else:
+            self.flowid = ('0.0.0.0', -1, '0.0.0.0', -1)
+        self.aggregate = aggregate
+        self.loss_count = [0, 0]
+        self.has_window = False
+        self.filename = filename
+        self.filepos = filepos
+        self.endtime = endtime
+
+    def src(self):
+        return self.flowid[0]
+
+    def sport(self):
+        return self.flowid[1]
+
+    def dst(self):
+        return self.flowid[2]
+
+    def dport(self):
+        return self.flowid[3]
+
+    def empty(self):
+        return self.s == ([], []) and self.loss == ([], [])
+    
+    def read_complete(self, adjust):
+        self.available = True
+        remove_duplicates(self.loss[0])
+        remove_duplicates(self.loss[1])
+        self.loss_count = [len(self.loss[0]), len(self.loss[1])]
+        for t in self.undelivered[0]:
+            p = self.find_packet(t, 0)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
+        for t in self.undelivered[1]:
+            p = self.find_packet(t, 1)
+            if p is not None:
+                p.flags |= TH_UNDELIVERED
+        if adjust:
+            t0 = s0 = s1 = 99999999999
+            if len(self.s[0]):
+                t0 = min(self.s[0][0].time, t0)
+                s0 = min(self.s[0][0].seq, s0)
+                if self.s[0][0].flags & TH_ACK:
+                    s1 = min(self.s[0][0].ack, s1)
+            if len(self.s[1]):
+                t0 = min(self.s[1][0].time, t0)
+                s0 = min(self.s[1][0].ack, s0)
+                s1 = min(self.s[1][0].seq, s1)
+            t0 -= 0.000001
+            for p in self.s[0]:
+                p.adjust(t0, s0, s1)
+            for p in self.s[1]:
+                p.adjust(t0, s1, s0)
+    
+    def first_index_after(self, time, dir=None):
+        if not self.available:
+            self.load()
+        if dir is None:
+            return self.first_index_after(time, 0), self.first_index_after(time, 1)
+        else:
+            fake_pkt = Packet(time, 0, 0, 0, 0)
+            return bisect(self.s[direction(dir)], fake_pkt)
+
+    def find_packet(self, time, dir=None):
+        if not self.available:
+            self.load()
+        if dir is None:
+            p = self.find_packet(time, 0)
+            if p is None: p = self.find_packet(time, 1)
+            return p
+        else:
+            dir = direction(dir)
+            i = self.first_index_after(time, dir)
+            if i > 0 and i <= len(self.s[dir]) and abs(self.s[dir][i-1].time - time) < 0.000001:
+                return self.s[dir][i-1]
+            elif i >= 0 and i < len(self.s[dir]) and abs(self.s[dir][i].time - time) < 0.000001:
+                return self.s[dir][i]
+            return None
+    
+    def packets(self, dir, begin=None, end=None, fuzz=0):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        if begin is None:
+            i = 0
+        else:
+            i = max(self.first_index_after(begin, dir) - fuzz, 0)
+        while i < len(self.s[dir]) and (end is None or self.s[dir][i].time <= end):
+            yield self.s[dir][i]; i += 1
+        while fuzz > 0 and i < len(self.s[dir]):
+            yield self.s[dir][i]; i += 1; fuzz -= 1
+    
+    def rev_packets(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        if end is None:
+            i = len(self.s[dir]) - 1
+        else:
+            i = self.first_index_after(end, dir) - 1
+        while i >= 0 and (begin is None or self.s[dir][i].time >= begin):
+            yield self.s[dir][i]
+            i -= 1
+    
+    def losses(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        for l in self.loss[dir]:
+            if l.time_overlaps(begin, end):
+                yield l
+    
+    def links(self, dir, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        i = 0
+        if begin is not None:
+            i = bisect_with_cmp(self.link[dir], lambda l: begin - l.t0) - 1
+            if i < 0: i = 0
+        while i < len(self.link[dir]):
+            l = self.link[dir][i]
+            l.fix(self, dir)
+            if l.time_overlaps(begin, end):
+                yield l
+            if end is not None and l.t0 > end:
+                break
+            i += 1
+    
+    def get_time_range(self, dir=None):
+        if not self.available:
+            self.load()
+        if dir is None:
+            m0, M0 = self.get_time_range(0)
+            m1, M1 = self.get_time_range(1)
+            return min(m0, m1), max(M0, M1)
+        elif len(self.s[dir]) == 0:
+            return 0, 1
+        else:
+            dir = direction(dir)
+            return self.s[dir][0].time, self.s[dir][-1].time
+    
+    def _time_index(self, dir, time, after):
+        if time is not None:
+            return self.first_index_after(time, dir)
+        elif after:
+            return len(self.s[dir])
+        else:
+            return 0
+    
+    def _seq_range(self, dir, begin, end):
+        s0, s1 = 1e10, 0.
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
+            s0 = min(s0, self.s[dir][i].seq - 10)
+            s1 = max(s1, self.s[dir][i].last_seq + 10)
+        for l in self.losses(dir, begin, end):
+            s0 = min(s0, l.seq - 10)
+            s1 = max(s1, l.end_seq + 10)
+        return max(s0, 0.), s1
+    
+    def _ack_range(self, dir, begin, end):
+        s0, s1 = 1e10, 0.
+        for i in range(self._time_index(dir, begin, False), self._time_index(dir, end, True)):
+            s0 = min(s0, self.s[dir][i].ack - 10)
+            s1 = max(s1, self.s[dir][i].ack + 10)
+        return max(s0, 0.), s1
+    
+    def get_seq_range(self, dir=None, begin=None, end=None):
+        if not self.available:
+            self.load()
+        dir = direction(dir)
+        r0, r1 = self._seq_range(dir, begin, end), self._ack_range(1 - dir, begin, end)
+        return min(r0[0], r1[0]), max(r0[1], r1[1])
+    
+    def get_description(self):
+        if self.flowid is None:
+            self.load()
+        s = ""
+        if self.aggregate >= 0:
+            s += "#" + str(self.aggregate) + ": "
+        return s + self.flowid[0] + ":" + str(self.flowid[1]) + " > " + self.flowid[2] + ":" + str(self.flowid[3])
+
+    def get_filename(self):
+        return self.filename
+    
+    def get_flowid_text(self, dir=0):
+        if self.flowid is None:
+            self.load()
+        dirstr = "><"[direction(dir)]
+        return self.flowid[0] + ":" + str(self.flowid[1]) + " " + dirstr + " " + self.flowid[2] + ":" + str(self.flowid[3])
+
+    def append(self, dir, p):
+        try:
+            if self.s[dir][-1].ack == p.ack:
+                p.dup_count = self.s[dir][-1].dup_count + 1
+        except IndexError:
+            pass
+        self.s[dir].append(p)
+    
+    def load_process(self):
+        if self.available:
+            return None
+        elif not self.dynload:
+            raise RuntimeError, "cannot load this Connection " + self.filename
+        else:
+            return ConnectionReader(conn=self).read_process(self.filename, filepos=self.filepos, endtime=self.endtime)
+
+    def load(self):
+        #f = self.load_process()
+        #while f is not None:
+        #    f = f()
+        pass
+    
+    def unload(self):
+        if self.dynload:
+            self.s = ([], [])
+            self.available = False
+
+    def __str__(self):
+        fid = self.flowid
+        return "<#%d: %s:%s <> %s:%s %d/%d>" % (self.aggregate, fid[0], fid[1], fid[2], fid[3], len(self.s[0]), len(self.s[1]))
+
+
+class FlowRef(object):
+
+    __slots__ = ['conn', 'dir']
+
+    def __init__(self, conn, dir):
+        self.conn, self.dir = conn, dir
+
+    def loss_count(self):
+        return self.conn.loss_count[self.dir]
+
+    def aggregate(self):
+        return self.conn.aggregate
+
+    def direction(self):
+        return self.dir
+
+    def has_window(self):
+        return self.conn.has_window
+
+    def get_flowid_text(self):
+        return self.conn.get_flowid_text(self.dir)
+
+    def get_description(self):
+        s = self.conn.get_description()
+        if self.dir:
+            s = re.sub(" > ", " < ", s)
+        return s
+
+    def get_filename(self):
+        return self.conn.get_filename()
+    
+    def opposite(self):
+        return FlowRef(self.conn, 1 - self.dir)
+
+    def available(self):
+        return self.conn.available
+    
+    def unload(self):
+        self.conn.unload()
+
+    def data_packets(self, begin=None, end=None, fuzz=0):
+        for p in self.conn.packets(self.dir, begin=begin, end=end, fuzz=fuzz):
+            yield p
+
+    def ack_packets(self, begin=None, end=None, fuzz=0):
+        for p in self.conn.packets(1 - self.dir, begin=begin, end=end, fuzz=fuzz):
+            yield p
+
+    def __cmp__(self, other):
+        if self.conn is other.conn:
+            return self.dir - other.dir
+        elif self.conn < other.conn:
+            return -1
+        else:
+            return 1
+
+    def __str__(self):
+        fid = self.conn.flowid
+        return "<#%d: %s:%s %s %s:%s>" % (self.conn.aggregate, fid[0], fid[1], "><"[self.dir], fid[2], fid[3])
+
+
+
+####################
+# Connection readers
+#
+
+class SafeFile:
+    def __init__(self, f):
+        self.f = f
+        self.str = ""
+        self.pos = 0
+    def __iter__(self):
+        return self
+    def readline(self):
+        while True:
+            eol = self.str.find("\n", self.pos)
+            if eol >= 0:
+                p, self.pos = self.pos, eol + 1
+                return self.str[p:self.pos]
+            if self.pos > 0:
+                self.str = self.str[self.pos:]
+                self.pos = 0
+            p = len(self.str)
+            self.str += self.f.read(32768)
+            if len(self.str) == 0:
+                return ""
+            elif len(self.str) == p:
+                self.pos = p
+                return self.str
+    def next(self):
+        r = self.readline()
+        if r == "":
+            raise StopIteration
+        else:
+            return r
+    def read(self):
+        p, self.pos = self.pos, len(self.str)
+        return self.str[p:] + self.f.read()
+
+
+class TCPPacket(object):
+
+    __slots__ = ['time', 'src', 'dst', 'sport', 'dport', 'seq', 'ack', 'flags', 'win', 'payload_len']
+
+    def __init__(self, time, s, iphl):
+        self.time = time
+        self.src, self.dst = struct.unpack('!LL', s[12:20])
+        self.sport, self.dport, self.seq, self.ack, crap, self.flags, self.win = \
+                    struct.unpack('!HHLLBBH', s[iphl:iphl+16])
+        tcp_off = ((crap >> 4) & 15) << 2
+        self.payload_len = struct.unpack('!H', s[2:4])[0] - iphl - tcp_off
+        
+
+class TCPDumpFile(object):
+
+    MAGIC = 0xA1B2C3D4L
+    MODIFIED_MAGIC = 0xA1B2CD34L
+    VMAJOR = 2
+    DLT_EN10MB = 1
+    DLT_RAW = 12
+
+    __slots__ = ['f', 's', 'pos', 'endian', 'vminor', 'snaplen', 'header',
+                 'header_size', 'ip_filter', 'dltfilter']
+
+    class Error(Exception):
+        def __init__(self, s=""):
+            self.str = s
+        def __str__(self):
+            return `self.str`
+
+    def __init__(self, f):
+        self.f = f
+        self.endian = '<'
+        try:
+            s = f.read(24)
+            magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                   struct.unpack('<LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                self.endian = '>'
+                magic, vmajor, vminor, thiszone, sigfigs, snaplen, linktype = \
+                       struct.unpack('>LHHLLLL', s)
+            if magic != self.MAGIC and magic != self.MODIFIED_MAGIC:
+                raise TCPDumpFile.Error("bad magic number " + `magic`)
+            if vmajor != self.VMAJOR:
+                raise TCPDumpFile.Error("bad major version")
+            
+            self.vminor = vminor
+            self.snaplen = snaplen
+            self.header = self.endian + 'LLLL'
+            self.header_size = 16
+            if magic == self.MODIFIED_MAGIC:
+                self.header_size += 8
+            self.s = ''
+            self.pos = 0
+
+            self.ip_filter = self.tcp_filter
+            if linktype == self.DLT_EN10MB:
+                self.dltfilter = self.ether_dltfilter
+            elif linktype == self.DLT_RAW:
+                self.dltfilter = self.ip_filter
+            else:
+                raise TCPDumpFile.Error("bad DLT")
+        except struct.error:
+            raise TCPDumpFile.Error("bad header length")
+
+    def seek(self, n):
+        self.s = ""
+        self.pos = 0
+        self.f.seek(n)
+
+    def tcp_filter(self, tsec, tusec, s):
+        vhl, p = ord(s[0:1]), ord(s[9:10])
+        v, hl = (vhl >> 4) & 0xF, (vhl & 0xF) << 2
+        if v == 4 and len(s) >= hl + 8 and p == 6:
+            return TCPPacket(tsec + tusec/1000000., s, hl)
+        else:
+            return None
+    
+    def ether_dltfilter(self, tsec, tusec, s):
+        if len(s) >= 14 + 20 and s[12:14] == "\x08\x00":
+            return self.ip_filter(tsec, tusec, s[14:])
+        else:
+            return None
+
+    def next_packet(self):
+        try:
+            s, pos = self.s, self.pos
+            while True:
+                if pos + self.header_size > len(s):
+                    s = s[pos:] + self.f.read(32768)
+                    pos = 0
+                tsec, tusec, caplen, plen = struct.unpack(self.header, s[pos:pos+16])
+                if self.vminor > 3:
+                    pass
+                elif self.vminor < 3 or caplen > plen:
+                    caplen, plen = plen, caplen
+                if caplen > 65535:
+                    return None             # error
+                
+                skiplen = 0
+                if caplen > plen:
+                    skiplen = caplen - plen
+                
+                pos += self.header_size
+                if pos + caplen > len(s):
+                    s, pos = s[pos:], 0
+                    while caplen > len(s):
+                        oldlen = len(s)
+                        s += self.f.read(32768)
+                        if len(s) == oldlen:
+                            return None     # error
+                p = self.dltfilter(tsec, tusec, s[pos:pos + caplen - skiplen])
+                pos += caplen
+                if p is not None:
+                    self.s, self.pos = s, pos
+                    return p
+        except struct.error:
+            return None
+
+
+class ConnectionReader:
+
+    _field_unpack_format = {
+        "ts_sec": "L", "ts_usec": "L", "ip_src": "L",
+        "ip_dst": "L", "ip_len": "L", "ip_proto": "B", "ip_id": "H", "sport": "H",
+        "dport": "H", "tcp_seq": "L", "tcp_ack": "L", "tcp_flags": "B", "payload_len": "L",
+        "count": "L", "ip_frag": "B", "ip_fragoff": "H", "direction": "B",
+        "aggregate": "L", "tcp_window": "H", "word_crap": "L"
+        }
+    _binary_size = { "L": 4, "H": 2, "B": 1 }
+    _parse_code = None
+    _parse_code_of = None
+    _parse_code_min_binary_len = 0
+    _parse_code_window = False
+
+    FAKE_ENDTIME = 8000000000.
+
+    def __init__(self, conn=None, flowset=None):
+        self.conn = conn; self.flowset = flowset
+        if conn is None: self.conn = Connection()
+        if flowset is None: self.flowset = FlowSet()
+        self.fake_conn = conn is None
+        self.fake_flowset = flowset is None
+        self.endtime = self.FAKE_ENDTIME
+
+    def connmap(self, aggregate):
+        try:
+            return self.cmap[aggregate]
+        except KeyError:
+            self.cmap[aggregate] = c = Connection(filename=self.filename, aggregate=aggregate)
+            self.flowset.append(c)
+            return c
+    
+    def _check_data(self):
+        # exit early if not active
+        if self.read_state != "a" and self.read_state != "b":
+            return
+
+        # replace 'timestamp' with 'ts_sec ts_usec' if necessary
+        line = self.read_data
+        if self.read_state == "b":
+            line = re.sub("\\btimestamp\\b", "ts_sec ts_usec", line)
+            line = re.sub("\\bfirst_timestamp\\b", "word_crap word_crap", line)
+        data = line[5:].split()
+
+        # drop everything after the first field we don't understand 
+        unpack_format = "!"; unpack_size = 0
+        if self.read_state == "b":
+            for i in range(0, len(data)):
+                try:
+                    f = self._field_unpack_format[data[i]]
+                    unpack_format += f; unpack_size += self._binary_size[f]
+                except KeyError:
+                    data = data[:i]
+                    break
+
+        # exit early if possible
+        if self._parse_code_of == (data, self.read_state):
+            self.conn.has_window = self._parse_code_window
+            return
+
+        # create mapping
+        m = dict(zip(data, range(len(data))))
+
+        # complain if important fields missing
+        if ("timestamp" not in m and "ts_sec" not in m) or "direction" not in m or "tcp_seq" not in m:
+            raise ConnectionFormatError, "bad !data missing important pieces"
+
+        # create code
+        if self.read_state == "b":
+            code = 'fields = struct.unpack("' + unpack_format + '", data[pos+4:pos+' + str(unpack_size + 4) + '])\n'
+            ifields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+            ipfields = dict(map(lambda x: (x[0], 'unparse_ip(fields[' + `x[1]` + '])'), m.items()))
+        else:
+            code = 'fields = line.split()\n'
+            ifields = dict(map(lambda x: (x[0], 'long(fields[' + `x[1]` + '])'), m.items()))
+            ffields = dict(map(lambda x: (x[0], 'float(fields[' + `x[1]` + '])'), m.items()))
+            ipfields = dict(map(lambda x: (x[0], 'fields[' + `x[1]` + ']'), m.items()))
+
+        # analyze fragments separately
+        if "timestamp" in m:
+            f_time = ffields["timestamp"]
+        elif "ts_sec" in m and "ts_usec" in m:
+            f_time = ifields["ts_sec"] + ' + ' + ifields["ts_usec"] + '/1000000.'
+        elif "ts_sec" in m:
+            f_time = ffields["ts_sec"]
+        if self.read_state == "b":
+            code += 'dir = ' + ifields["direction"] + '\n'
+        else:
+            code += 'dir = direction(fields[' + `m["direction"]` + '])\n'
+        if "tcp_seq" in m:
+            f_seq = ffields["tcp_seq"]
+        else:
+            f_seq = '0.'
+        if "payload_len" in m:
+            f_len = ifields["payload_len"]
+        else:
+            f_len = '0'
+        if "tcp_ack" in m:
+            f_ack = ffields['tcp_ack']
+        else:
+            f_ack = '0.'
+        if "tcp_flags" in m:
+            if self.read_state == "b":
+                f_flags = ifields["tcp_flags"]
+            else:
+                code += 'flags = parse_tcp_flags(fields[' + `m["tcp_flags"]` + '])\n'
+                f_flags = 'flags'
+        else:
+            f_flags = '0'
+        if "tcp_window" in m:
+            f_window = ifields["tcp_window"]
+        else:
+            f_window = '0'
+
+        # fetch connection
+        if "aggregate" in m:
+            code += 'try:\n\
+    c = self.cmap[' + ifields["aggregate"] + ']\n\
+except KeyError:\n\
+    c = Connection(filename=self.filename, aggregate=' + ifields["aggregate"]
+            if "ip_src" in m: code += ', src=' + ipfields["ip_src"]
+            if "ip_dst" in m: code += ', dst=' + ipfields["ip_dst"]
+            if "sport" in m: code += ', sport=' + ipfields["sport"]
+            if "dport" in m: code += ', dport=' + ipfields["dport"]
+            code += ')\n\
+    c.has_window = self._parse_code_window\n\
+    self.cmap[' + ifields["aggregate"] + '] = c\n\
+    self.flowset.append(c)\n'
+            f_conn = 'c'
+        else:
+            f_conn = 'self.conn'
+
+        code += f_conn + '.append(dir, Packet(' + f_time + ', ' + f_flags + ', ' + f_seq + ', ' + f_len + ', ' + f_ack + ', ' + f_window + '))\n'
+
+        self._parse_code = compile(code, "<generated function>", "exec")
+        self._parse_code_of = (data, self.read_state)
+        self._parse_code_min_binary_len = unpack_size + 4
+        self._parse_code_window = "tcp_window" in m
+
+        # remember whether or not we have a window
+        self.conn.has_window = self._parse_code_window
+    
+    def _read_nonpacket(self, line):
+        if re.match('\\#[pf]?loss', line):
+            type, dir, time, seq, end_time, end_seq = line[1:].split()[:6]
+            self.conn.loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+        elif re.match('\\#a[pf]?loss', line):
+            type, agg, dir, time, seq, end_time, end_seq = line[2:].split()[:7]
+            self.connmap(agg).loss[direction(dir)].append(LossEvent(type, time, seq, end_time, end_seq))
+        elif re.match('!flowid', line):
+            fid = line.split()[1:5]
+            self.conn.flowid = (fid[0], int(fid[1]), fid[2], int(fid[3]))
+        elif re.match('!aggregate', line):
+            self.conn.aggregate = long(line.split()[1])
+        elif re.match('!data ', line):
+            self.read_data = line
+            self._check_data()
+        elif re.match('!binary', line):
+            self.read_state = 'b'
+            self._check_data()
+            self.read_func = self._read_ipsumdump_binary_chunk
+            self.file_data = self.f.read()
+            return 1
+        elif re.match('!eof$', line):
+            self.read_func = self._complete_ipsumdump
+            return 1
+        elif line[:2] == "\037\235" or line[:2] == "\037\213": # compressed data
+            raise ConnectionFileCompressedError
+        return 0
+
+    # IPSummaryDump files
+    def read_ipsumdump_process(self, filename, f, filepos=None, endtime=None):
+        self.filename = filename
+        self.cmap = { }
+
+        # read the file header
+        self.read_state = ""; self.read_data = ""; self.read_func = None
+        self.f = f = SafeFile(f)
+        for line in f:
+            if line and line[0] >= '0':
+                self.read_state = "a"
+                self._check_data()
+                self.read_func = self._read_ipsumdump_ascii_chunk
+                exec self._parse_code
+                break
+            elif self._read_nonpacket(line):
+                break
+        return self.read_func
+
+    def _read_ipsumdump_binary_chunk(self):
+        data = self.file_data
+        pos, leng, count = 0, len(data), 1000
+        while pos + 4 < leng and count > 0:
+            l, = struct.unpack("!l", data[pos:pos+4])
+            i = l & 0x7FFFFFFF
+            if pos + i > leng:
+                raise ConnectionFormatError, "corrupted file"
+            elif l & 0x80000000:
+                if self._read_nonpacket(data[pos+4:pos+i]):
+                    return self.read_func
+            elif i >= self._parse_code_min_binary_len:
+                exec self._parse_code
+            pos += i; count -= 1
+        self.file_data = data[pos:]
+        return pos + 4 < leng and self.read_func or self._complete_ipsumdump
+
+    def _read_ipsumdump_ascii_chunk(self):
+        f = self.f
+        for line in f:
+            if line and line[0] >= '0':
+                exec self._parse_code
+            elif self._read_nonpacket(line):
+                return self.read_func
+        return self._complete_ipsumdump
+
+    def _complete_ipsumdump(self):
+        # complete connections
+        self.conn.read_complete(False)
+        for c in self.cmap.values():
+            c.read_complete(True)
+        if not self.fake_flowset and self.fake_conn and not self.conn.empty():
+            self.flowset.append(self.conn)
+        return None
+
+    # tcpdump files
+    def read_tcpdump_process(self, filename, f, filepos=None, endtime=None):
+        self.filename = filename
+        self.read_aggregate = 1
+
+        # prepare flowmap
+        self.read_flowmap = { }
+        if not self.fake_conn:
+            flowid = (parse_ip(self.conn.src()), self.conn.sport(), parse_ip(self.conn.dst()), self.conn.dport())
+            self.read_flowmap[flowid] = (self.conn, 0)
+            self.read_flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (self.conn, 1)
+        
+        # actually read file
+        self.f = TCPDumpFile(f)
+        if filepos is not None:
+            self.f.seek(filepos)
+        if endtime is not None:
+            self.endtime = endtime
+
+        return self._read_tcpdump
+
+    def _read_tcpdump(self):
+        f, endtime, flowmap = self.f, self.endtime, self.read_flowmap
+        i = 0
+        while i < 1000:
+            i += 1
+            p = self.f.next_packet()
+            if p is None or p.time > endtime:
+                return self._complete_tcpdump
+            flowid = (p.src, p.sport, p.dst, p.dport)
+            try:
+                c, dir = flowmap[flowid]
+            except KeyError:
+                c = Connection(filename=self.filename, dynload=False, aggregate=self.read_aggregate, src=unparse_ip(p.src), dst=unparse_ip(p.dst), sport=p.sport, dport=p.dport)
+                self.read_aggregate += 1
+                self.flowset.append(c)
+                dir = 0
+                flowmap[flowid] = (c, 0)
+                flowmap[(flowid[2], flowid[3], flowid[0], flowid[1])] = (c, 1)
+            c.append(dir, Packet(p.time, p.flags, p.seq, p.payload_len, p.ack, p.win))
+        return self._read_tcpdump
+
+    def _complete_tcpdump(self):
+        for c, d in self.read_flowmap.values():
+            if d == 0:
+                c.has_window = True
+                c.read_complete(True)
+        return None
+
+    # progress tracking
+    def process_position(self):
+        if self.endtime != self.FAKE_ENDTIME:
+            s0, s1 = self.conn.s[0], self.conn.s[1]
+            mint = min(len(s0) == 0 and self.FAKE_ENDTIME or s0[0].time,
+                       len(s1) == 0 and self.FAKE_ENDTIME or s1[0].time)
+            maxt = max(len(s0) == 0 and -1 or s0[-1].time,
+                       len(s1) == 0 and -1 or s1[-1].time)
+            if mint < maxt:
+                return (maxt - mint) / (self.endtime - mint)
+            else:
+                raise PulseProcess()
+        elif self.file_size is not None:
+            return float(self.base_file.tell()) / self.file_size
+        else:
+            raise PulseProcess()
+
+    def process_function(self):
+        return self.process_func
+
+    # general reading
+    def read_process(self, filename, f=None, filepos=None, endtime=None):
+        # open file, get its size
+        if f is None:
+            f = file(filename, "rb")
+        try:
+            f.seek(0, 2)
+            self.file_size = f.tell()
+            f.seek(0)
+        except IOError:
+            self.file_size = None
+        self.base_file = f
+
+        # uncompress file if appropriate
+        s = f.read(2)
+        f.seek(0)
+        if s == "\037\235" or s == "\037\213":
+            f = gzip.GzipFile(fileobj=f)
+            s = f.read(1)
+            f.seek(0)
+
+        # return the appropriate process
+        if s[0] == '<':
+            self.process_func = self.flowset.read_process(filename, f)
+        elif s[0] == '!' or s[0] == '#' or (s[0] >= '0' and s[0] <= 'Z'):
+            self.process_func = self.read_ipsumdump_process(filename, f, filepos, endtime)
+        else:
+            self.process_func = self.read_tcpdump_process(filename, f, filepos, endtime)
+        return self
+
+    def read(self, filename, f=None, filepos=None, endtime=None):
+        self.read_process(filename, f, filepos, endtime)
+        func = self.process_func
+        while func is not None:
+            func = func()
+
+
+####################
+# FlowSet
+#
+
+class FlowSet:
+
+    SORT_NONE = 0
+    SORT_LOSS = 1
+
+    READ_NONE = 0
+    READ_TRACE = 1
+    READ_ACKCAUSALITY = 2
+    READ_UNDELIVERED = 3
+    READ_PACKET = 4
+
+    def __init__(self):
+        self.conns = []
+        self.flows = []
+        self.sorted = FlowSet.SORT_NONE
+        self.min_aggregate = 999999999
+        self.max_aggregate = 0
+
+    def read_process(self, filename, f):
+        self.filename = filename
+        self.f = f
+        
+        slash = filename.rfind('/')
+        if slash >= 0:
+            self.reading_directory = filename[:slash+1]
+        else:
+            self.reading_directory = ""
+
+        self.parser = xml.parsers.expat.ParserCreate()
+        self.parser.returns_unicode = 0
+        self.parser.StartElementHandler = self._start_element
+        self.parser.EndElementHandler = self._end_element
+        self.parser.CharacterDataHandler = self._char_data
+        self.reading_state = FlowSet.READ_NONE
+        self.reading_connection = self.reading_direction = None
+        self.reading_lastline = None
+	self.reading_hadpackets = False
+
+        return self._read_process
+
+    def _read_process(self):
+        s = self.f.read(16000)
+        self.parser.Parse(s, len(s) == 0)
+        if len(s) == 0:
+            return None
+        else:
+            return self._read_process
+
+    def _handle_number(self, x, format, precision):
+        if precision >= 0 and precision <= 3:
+            x = (self >> ((3 - precision) * 8)) & 255
+        elif precision >= 4 and precision <= 5:
+            x = (self >> ((5 - precision) * 16)) & 65535
+        if format == 'n':
+            return str(x)
+        else:
+            return ('%' + format) % x
+
+    def _handle_ip(self, x, precision):
+        if precision >= 0 and precision <= 3:
+            return x.split('.')[precision]
+        else:
+            return x
+
+    def _expand_filename(self, aggregate, src, sport, dst, dport):
+        s = self.reading_output_pattern
+        ss = ''
+        pos = s.find('%')
+        while pos >= 0:
+            ss += s[:pos]; pos += 1
+            pad, field_width, precision = ' ', 0, -1
+            if s[pos:pos+1] == '0': pad = '0'; pos += 1
+            while s[pos:pos+1] >= '0' and s[pos:pos+1] <= '9': field_width = (field_width * 10) + ord(s[pos:pos+1]) - ord('0'); pos += 1
+            if s[pos:pos+1] == '.': precision = int(s[pos+1:pos+2]); pos += 2
+            x = s[pos:pos+1]
+            if x in ['n', 'x', 'X']:
+                q = self._handle_number(aggregate, x, precision)
+            elif x == 's':
+                q = self._handle_ip(src, precision)
+            elif x == 'd':
+                q = self._handle_ip(dst, precision)
+            elif x == 'S':
+                q = self._handle_number(sport, 'n', precision)
+            elif x == 'D':
+                q = self._handle_number(dport, 'n', precision)
+            elif x == 'p':
+                q = 'T'
+            else:
+                q = x
+            if field_width > len(q): q = (pad * (field_width - len(q))) + q
+            ss += q
+            s = s[pos+1:]
+            pos = s.find('%')
+        return ss + s
+
+    def fix_directory(self, fn):
+        if fn is not None and fn[0] != '/' and self.reading_directory != '':
+            return self.reading_directory + fn
+        else:
+            return fn
+
+    def _start_element(self, name, attrs):
+        if name == 'trace':
+            if self.reading_state != FlowSet.READ_NONE:
+                raise ConnectionFormatError, "nested <trace>"
+            self.reading_output_pattern = self.fix_directory(attrs.get("flowfilepattern", None))
+            self.reading_tracefile = self.fix_directory(attrs.get("file", None))
+            self.reading_state = FlowSet.READ_TRACE
+        elif name == 'flow' and self.reading_state == FlowSet.READ_TRACE:
+            agg, src, sport, dst, dport = long(attrs["aggregate"]), attrs["src"], int(attrs["sport"]), attrs["dst"], int(attrs["dport"])
+            filepos = endtime = None
+            if self.reading_output_pattern is not None:
+                filename = self._expand_filename(agg, src, sport, dst, dport)
+            else:
+                filename = self.reading_tracefile
+                if "filepos" in attrs: filepos = long(attrs["filepos"])
+            if "duration" in attrs and "begin" in attrs:
+                endtime = float(attrs["begin"]) + float(attrs["duration"])
+            self.reading_connection = Connection(filename=filename, aggregate=agg, src=src, sport=sport, dst=dst, dport=dport, filepos=filepos, endtime=endtime, dynload=(self.reading_tracefile is not None))
+            self.append(self.reading_connection)
+	    self.reading_hadpackets = False
+        elif name == 'stream' and self.reading_connection is not None:
+            try:
+                d, l, pl, fl = int(attrs["dir"]), long(attrs.get("nloss", 0)), long(attrs.get("nploss", 0)), long(attrs.get("nfloss", 0))
+                self.reading_connection.loss_count[d] += l + pl + fl
+                self.reading_direction = d
+            except KeyError:
+                pass
+        elif name == 'anno' and self.reading_direction is not None:
+            try:
+                type, t0, s0, t1, s1 = attrs["type"], float(attrs["time"]), float(attrs["seq"]), float(attrs["endtime"]), float(attrs["lastseq"])
+                self.reading_connection.loss[self.reading_direction].append(LossEvent(type, t0, s0, t1, s1))
+            except KeyError:
+                pass
+        elif (name == 'ackcausality' or name == 'ackcausation') and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_ACKCAUSALITY
+        elif name == 'undelivered' and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_UNDELIVERED
+        elif name == 'packet' and self.reading_direction is not None:
+            self.reading_state = FlowSet.READ_PACKET
+	    self.reading_hadpackets = True
+
+    def _end_element(self, name):
+        if name == 'trace':
+            self.reading_state = FlowSet.READ_NONE
+        elif name == 'flow':
+	    if self.reading_hadpackets:
+		self.reading_connection.read_complete(False)
+            self.reading_connection = None
+        elif name == 'stream':
+            self.reading_direction = None
+        elif (name == 'ackcausality' or name == 'ackcausation') and self.reading_state == FlowSet.READ_ACKCAUSALITY:
+            self.reading_state = FlowSet.READ_TRACE
+        elif name == 'undelivered' and self.reading_state == FlowSet.READ_UNDELIVERED:
+            self.reading_state = FlowSet.READ_TRACE
+        elif name == 'packet' and self.reading_state == FlowSet.READ_PACKET:
+            self.reading_state = FlowSet.READ_TRACE
+
+    def _char_data(self, data):
+        if self.reading_state != FlowSet.READ_ACKCAUSALITY and self.reading_state != FlowSet.READ_UNDELIVERED and self.reading_state != FlowSet.READ_PACKET:
+            return
+        if self.reading_lastline is not None:
+            data = self.reading_lastline + data
+        last_newline = data.rfind("\n")
+        self.reading_lastline = data[last_newline+1:]
+        data = data[0:last_newline+1]
+        if self.reading_state == FlowSet.READ_ACKCAUSALITY:
+            links = self.reading_connection.link[self.reading_direction]
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 3:
+                    t0, s1, t1 = x[0:3]
+                    ft0 = float(t0)
+                    links.append(PacketLink(ft0, None, ft0 + float(t1), float(s1)))
+        elif self.reading_state == FlowSet.READ_UNDELIVERED:
+            undelivered = self.reading_connection.undelivered[self.reading_direction]
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 2:
+                    undelivered.append(float(x[0]))
+        elif self.reading_state == FlowSet.READ_PACKET:
+            c = self.reading_connection
+            dir = self.reading_direction
+            for line in data.splitlines():
+                x = line.split()
+                if len(x) >= 4:
+                    c.append(dir, Packet(float(x[0]), 0, int(x[1]), int(x[2]), int(x[3]), 0))
+
+    def _flow_sorter(a, b):
+        return int(b.loss_count() - a.loss_count() or a.aggregate() - b.aggregate() or a.dir - b.dir)
+    _flow_sorter = staticmethod(_flow_sorter)
+
+    def sort_by_loss_count(self):
+        self.flows.sort(self._flow_sorter)
+        self.sorted = FlowSet.SORT_LOSS
+
+    def __getitem__(self, k):
+        if type(k) == types.SliceType:
+            return self.flows[k.start:k.stop]
+        else:
+            return self.flows[k]
+
+    def __len__(self):
+        return len(self.flows)
+
+    def append(self, conn):
+        self.conns.append(conn)
+        self.flows.append(FlowRef(conn, 0))
+        self.flows.append(FlowRef(conn, 1))
+        self.min_aggregate = min(self.min_aggregate, conn.aggregate)
+        self.max_aggregate = max(self.max_aggregate, conn.aggregate)
+
+    def index(self, flowref):
+        if self.sorted == FlowSet.SORT_LOSS:
+            l, a = flowref.loss_count(), flowref.aggregate()
+            return bisect_with_cmp(self.flows, lambda f: f.loss_count() - l or a - f.aggregate() or flowref.dir - f.dir) - 1
+        else:
+            return self.flows.index(flowref)
+
+    def find_aggregate(self, aggregate):
+        for c in self.conns:
+            if c.aggregate == aggregate:
+                return FlowRef(c, 0)
+        raise RuntimeError("Not found " + str(aggregate))
+
+
+_by_loss_groups = [ (50, "50 or more losses"),
+                    (30, "30-49 losses"),
+                    (20, "20-29 losses"),
+                    (10, "10-19 losses"),
+                    (5, "5-9 losses"),
+                    (4, "4 losses"),
+                    (3, "3 losses"),
+                    (2, "2 losses"),
+                    (1, "1 loss"),
+                    (0, "no losses") ]
+
+class FlowSetTreeModelByLosses(gtk.GenericTreeModel):
+    '''This class represents the model of a tree.  The iterators used
+    to represent positions are converted to python objects when passed
+    to the on_* methods.  This means you can use any python object to
+    represent a node in the tree.  The None object represents a NULL
+    iterator.'''
+
+    def __init__(self, flowset):
+	'''constructor for the model.  Make sure you call
+	PyTreeModel.__init__'''
+        self.flowset = flowset
+        self.analyze_flowset()
+	gtk.GenericTreeModel.__init__(self)
+
+    def analyze_flowset(self):
+        self.cg = []
+        self.gn = []
+        if self.flowset is not None and len(self.flowset) > 0:
+            self.flowset.sort_by_loss_count()
+            i = 0; first = 0; lc = self.flowset[i].loss_count()
+            blg = 0; min_losses = _by_loss_groups[blg][0]
+            while i < len(self.flowset):
+                f = self.flowset[i]
+                if f.loss_count() < min_losses:
+                    if first < i:
+                        self.gn.append(_by_loss_groups[blg][1])
+                        self.cg.append(self.flowset[first:i])
+                        first = i
+                    blg += 1; min_losses = _by_loss_groups[blg][0]
+                else:
+                    i += 1
+            if first < i:
+                self.gn.append(_by_loss_groups[blg][1])
+                self.cg.append(self.flowset[first:i])
+
+    # the implementations for TreeModel methods are prefixed with on_
+    def on_get_flags(self):
+	'''returns the GtkTreeModelFlags for this particular type of model'''
+	return 0
+    def on_get_n_columns(self):
+	'''returns the number of columns in the model'''
+	return 3
+    def on_get_column_type(self, index):
+	'''returns the type of a column in the model'''
+	return gobject.TYPE_STRING
+    
+    def on_get_path(self, node):
+	'''returns the tree path (a tuple of indices at the various
+	levels) for a particular node.'''
+        return node
+    def on_get_iter(self, path):
+        '''returns the node corresponding to the given path.  In our
+        case, the node is the path'''
+        return path
+
+    def path2flowref(self, n):
+        assert len(n) == 2
+        return self.cg[n[0]][n[1]]
+    def flowref2path(self, fref):
+        lc = fref.loss_count()
+        i = 0
+        while i < len(self.cg) and lc < self.cg[i][-1].loss_count():
+            i += 1
+        if i >= len(self.cg):
+            return None
+        for j in range(0, len(self.cg[i])):
+            if self.cg[i][j] == fref:
+                return (i, j)
+        return None
+    
+    def on_get_value(self, n, column):
+	'''returns the value stored in a particular column for the node'''
+        #print n
+        if len(n) == 1:
+            if column == 1:
+                return self.gn[n[0]]
+            else:
+                return ''
+        elif column == 0:
+            # XXX shown()
+            return ''
+        elif column == 1:
+            l = self.path2flowref(n).loss_count()
+            if l == 1:
+                return '1 loss'
+            else:
+                return `l` + ' losses'
+        elif column == 2:
+            return '#' + `self.path2flowref(n).aggregate()`
+        else:
+            return self.path2flowref(n).get_flowid_text()
+            
+    def on_iter_next(self, n):
+	'''returns the next node at this level of the tree'''
+        #print "on_iter_next", n
+        if len(n) == 1 and n[0] < len(self.cg) - 1:
+            return n[0]+1,
+        elif len(n) == 2 and n[1] < len(self.cg[n[0]]) - 1:
+            return n[0], n[1]+1
+        else:
+            return None
+    def on_iter_children(self, n):
+	'''returns the first child of this node'''
+        #print "on_iter_children", n
+        if n is None:
+            if len(self.cg) > 0:
+                return 0,
+        elif len(n) == 1:
+            return n + (0,)
+        return None
+    def on_iter_has_child(self, n):
+	'''returns true if this node has children'''
+        #print "on_iter_has_child", n
+        if n is None:
+            return len(self.cg) > 0
+        else:
+            return len(n) == 1
+    def on_iter_n_children(self, n):
+	'''returns the number of children of this node'''
+        #print "on_iter_n_children", n
+        if n is None:
+            return len(self.cg)
+        elif len(n) == 1:
+            return len(self.cg[n[0]])
+        else:
+            return 0
+    def on_iter_nth_child(self, n, i):
+	'''returns the nth child of this node'''
+        #print "on_iter_nth_child", n
+        if n is None:
+            return len(self.cg) and (i,) or None
+        elif len(n) == 1 and i < len(self.cg[n[0]]):
+            return n + (i,)
+        else:
+            return None
+    def on_iter_parent(self, n):
+	'''returns the parent of this node'''
+	if len(n) == 0:
+	    return None
+	else:
+	    return n[:-1]
+
+
+####################
+# PlotCanvas helpers and Drawables
+#
+
+class PlotCursors:
+
+    _d = {
+    "zoomin": ("zoomin_data", "zoom_mask", 6, 6, gtk.gdk.SB_UP_ARROW),
+    "zoomout": ("zoomout_data", "zoom_mask", 6, 6, gtk.gdk.SB_DOWN_ARROW),
+    "hand": ("hand_data", "hand_mask", 9, 8, gtk.gdk.FLEUR),
+    "grabhand": ("grabhand_data", "grabhand_mask", 8, 7, gtk.gdk.FLEUR),
+    "zoomdrag": ("zoomin_data", "zoom_mask", 6, 6, gtk.gdk.SIZING),
+    "zoomin_data": (string.join(map(chr, [
+	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x62, 0x04, 0x00,
+        0x61, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x61, 0x08, 0x00,
+        0x62, 0x04, 0x00, 0x02, 0x04, 0x00, 0x0c, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00 ]), ''), 17, 17),
+    "zoomout_data": (string.join(map(chr, [
+	0xf0, 0x00, 0x00, 0x0c, 0x03, 0x00, 0x02, 0x04, 0x00, 0x02, 0x04, 0x00,
+        0x01, 0x08, 0x00, 0xf9, 0x09, 0x00, 0xf9, 0x09, 0x00, 0x01, 0x08, 0x00,
+        0x02, 0x04, 0x00, 0x02, 0x04, 0x00, 0x0c, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00 ]), ''), 17, 17),
+    "zoom_mask": (string.join(map(chr, [
+        0xf0, 0x00, 0x00, 0xfc, 0x03, 0x00, 0xfe, 0x07, 0x00, 0xfe, 0x07, 0x00,
+        0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00, 0xff, 0x0f, 0x00,
+        0xfe, 0x07, 0x00, 0xfe, 0x07, 0x00, 0xfc, 0x0f, 0x00, 0xf0, 0x1c, 0x00,
+        0x00, 0x38, 0x00, 0x00, 0x70, 0x00, 0x00, 0xe0, 0x00, 0x00, 0xc0, 0x01,
+        0x00, 0x80, 0x00]), ''), 17, 17),
+    "hand_data": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0xb0, 0x1c, 0x00, 0xc8, 0x24, 0x00,
+        0xc8, 0xa4, 0x00, 0x90, 0x64, 0x01, 0x90, 0x24, 0x01, 0x2c, 0x20, 0x01,
+        0x32, 0x00, 0x01, 0x22, 0x80, 0x00, 0x04, 0x80, 0x00, 0x08, 0x80, 0x00,
+        0x08, 0x40, 0x00, 0x10, 0x40, 0x00, 0x20, 0x20, 0x00, 0x40, 0x20, 0x00,
+        0x40, 0x20, 0x00, 0x00, 0x00, 0x00]), ''), 18, 18),
+    "hand_mask": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0xb0, 0x1f, 0x00, 0xf8, 0x3f, 0x00,
+        0xf8, 0xbf, 0x00, 0xf0, 0xff, 0x01, 0xf0, 0xff, 0x01, 0xec, 0xff, 0x01,
+        0xfe, 0xff, 0x01, 0xfe, 0xff, 0x00, 0xfc, 0xff, 0x00, 0xf8, 0xff, 0x00,
+        0xf8, 0x7f, 0x00, 0xf0, 0x7f, 0x00, 0xe0, 0x3f, 0x00, 0xc0, 0x3f, 0x00,
+        0xc0, 0x3f, 0x00, 0x00, 0x00, 0x00]), ''), 18, 18),
+    "grabhand_data": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x0d, 0x48, 0x12,
+        0x08, 0x30, 0x0c, 0x40, 0x0a, 0x40, 0x02, 0x40, 0x02, 0x40, 0x02, 0x20,
+        0x04, 0x20, 0x08, 0x10, 0x10, 0x10, 0x10, 0x10]), ''), 16, 16),
+    "grabhand_mask": (string.join(map(chr, [
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0, 0x0d, 0xf8, 0x1f,
+        0xf8, 0x3f, 0xfc, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x7f, 0xfe, 0x3f,
+        0xfc, 0x3f, 0xf8, 0x1f, 0xf0, 0x1f, 0xf0, 0x1f]), ''), 16, 16)
+    }
+
+    def __init__(self, win):
+        self.window = win
+    def make_pixmap(self, name):
+        pname = name + ".pix"
+        if pname not in PlotCursors._d:
+            try:
+                l = PlotCursors._d[name]
+                PlotCursors._d[pname] = gtk.gdk.bitmap_create_from_data(self.window.window, l[0], l[1], l[2])
+            except:
+                PlotCursors._d[pname] = None
+        return PlotCursors._d[pname]
+    def __getitem__(self, name):
+        cname = name + ".cur"
+        if cname not in PlotCursors._d:
+            if name not in PlotCursors._d:
+                PlotCursors._d[name] = ("", "", 0, 0, gtk.gdk.LEFT_PTR)
+            data, mask, hotx, hoty, default = PlotCursors._d[name]
+            dpix, mpix = self.make_pixmap(data), self.make_pixmap(mask)
+            if dpix is not None and mpix is not None:
+                black = self.window.get_style().black
+                white = self.window.get_style().white
+                PlotCursors._d[cname] = gtk.gdk.Cursor(dpix, mpix, black, white, hotx, hoty)
+            else:
+                PlotCursors._d[cname] = gtk.gdk.Cursor(default)
+        return PlotCursors._d[cname]
+
+
+ANCHOR_N = 0
+ANCHOR_E = 1
+ANCHOR_S = 2
+ANCHOR_ROT = 4
+
+class PlotCanvas_ScreenDrawable:
+
+    _gcs = { }
+
+    ANCHOR_OFFSET = { ANCHOR_N: (0, 2, -0.5, 0), ANCHOR_E: (-4, 0, -1, -0.5),
+                      ANCHOR_S: (0, -2, -0.5, -1) }
+
+    def __init__(self, plotcanvas, immediate=False):
+        self.plotcanvas = plotcanvas
+        self.playout = self.small_playout = self.flags_playout = None
+        self.immediate = immediate
+
+    def gc(self, name):
+        if name in PlotCanvas_ScreenDrawable._gcs:
+            return PlotCanvas_ScreenDrawable._gcs[name]
+        orig_name = name
+        if name not in _screen_style:
+            name = re.sub("\\..*", "", name)
+        s = _screen_style[name]
+        cmap = self.plotcanvas.canvas.get_colormap()
+        gc = self.plotcanvas.canvas.window.new_gc(foreground=cmap.alloc_color(red=int(s.red * 65535), green=int(s.green * 65535), blue=int(s.blue * 65535)), line_width=0, cap_style=gtk.gdk.CAP_BUTT)
+        if s.linewidth != 1:
+            gc.line_width = s.linewidth
+        if len(s.dash) > 0:
+            gc.set_dashes(0, s.dash)
+        PlotCanvas_ScreenDrawable._gcs[orig_name] = gc
+        return gc
+
+    def layout(self, name=""):
+        if name == "small":
+            if self.small_playout is None:
+                new_pcontext = self.plotcanvas.canvas.create_pango_context()
+                new_pfontdesc = new_pcontext.get_font_description().copy()
+                new_pfontdesc.set_size(int(new_pfontdesc.get_size() * 0.75))
+                new_pcontext.set_font_description(new_pfontdesc)
+                self.small_playout = pango.Layout(new_pcontext)
+            return self.small_playout
+        elif name == "flags":
+            if self.flags_playout is None:
+                new_pcontext = self.plotcanvas.canvas.create_pango_context()
+                new_pfontdesc = new_pcontext.get_font_description().copy()
+                new_pfontdesc.set_weight(pango.WEIGHT_HEAVY)
+                new_pfontdesc.set_size(int(new_pfontdesc.get_size() * 0.75))
+                new_pcontext.set_font_description(new_pfontdesc)
+                self.flags_playout = pango.Layout(new_pcontext)
+            return self.flags_playout
+        elif name == "":
+            if self.playout is None:
+                self.playout = self.plotcanvas.canvas.create_pango_layout("")
+            return self.playout
+        else:
+            return None
+
+    def want(self, name):
+        return False
+    
+    def prepare(self):
+        if self.immediate:
+            self.drawable = self.plotcanvas.canvas.window
+        else:
+            self.drawable = self.plotcanvas.backing_store
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height)
+        p = self.plotcanvas
+        return (p.left_margin, p.top_margin, p.plot_width, p.plot_height)
+
+    def complete(self):
+        gc = self.plotcanvas.canvas.get_style().black_gc
+        self.plotcanvas.canvas.window.draw_drawable(gc, self.drawable, 0, 0, 0, 0, -1, -1)
+        self.plotcanvas.backing_store_updated = True
+    
+    def clip(self, gc, rectangle):
+        gc.set_clip_rectangle(rectangle)
+
+    def unclip(self, gc):
+        pass
+
+    def clear(self):
+        gc = self.plotcanvas.canvas.get_style().bg_gc[gtk.STATE_NORMAL]
+        self.drawable.draw_rectangle(gc, True, 0, 0, -1, -1)
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        self.drawable.draw_line(gc, int(x1), int(y1), int(x2), int(y2))
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1 and l[0][0] < 0:
+            x1, y1 = l[0]; x2, y2 = l[1]
+            l[0] = (0, y1 + (-x1 / (x2 - x1)) * (y2 - y1))
+        if len(l) > 1:
+            self.drawable.draw_lines(gc, l)
+
+    def fill_rectangle(self, gc, *args):
+        if len(args) == 1 and len(args[0]) == 4:
+            x, y, w, h = args[0]
+        elif len(args) == 4:
+            x, y, w, h = args
+        else:
+            raise TypeError("PlotCanvas_Drawable.fill_rectangle() takes 1 or 4 arguments")
+        if w > 0 and h > 0 and gc is not None:
+            self.drawable.draw_rectangle(gc, True, int(x), int(y), int(w), int(h))
+
+    def draw_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.drawable.draw_rectangle(gc, False, int(x), int(y), int(w), int(h))
+
+    def anchor_offset(self, anchor):
+        return self.ANCHOR_OFFSET[anchor][0:2]
+
+    def draw_text(self, gc, layout, text, x, y, anchor=ANCHOR_N):
+        try:
+            layout.set_text(text)
+        except:
+            layout.set_text(text, -1)
+        ir, lr = layout.get_extents()
+        w, h = lr[2]/1024., lr[3]/1024.
+        xoff, yoff, xamt, yamt = self.ANCHOR_OFFSET[anchor]
+        self.drawable.draw_layout(gc, int(x + xamt*w + xoff), int(y + yamt*h + yoff), layout)
+
+    def text_size(self, layout, text):
+        try:
+            layout.set_text(text)
+        except:
+            layout.set_text(text, -1)
+        ir, lr = layout.get_extents()
+        return (lr[2]/1024., lr[3]/1024., 0)
+    
+    def draw_data(self, gc, x, y1, y2):
+        self.draw_line(gc, x - 2, y1, x + 2, y1)
+        self.draw_line(gc, x - 2, y2, x + 2, y2)
+        self.draw_line(gc, x, y1, x, y2)
+
+    def draw_ack(self, gc, x, y):
+        self.draw_line(gc, x - 2, y - 2, x + 3, y + 3)
+        self.draw_line(gc, x - 2, y + 2, x + 3, y - 3)
+    
+    def draw_dataack(self, gc, x, y):
+        self.draw_line(gc, x - 2, y - 2, x + 3, y + 3)
+        self.draw_line(gc, x - 2, y + 2, x + 3, y - 3)
+        self.draw_line(gc, x - 2, y, x + 2, y)
+        self.draw_line(gc, x, y + 2, x, y - 2)
+
+
+class PostScriptFont:
+    
+    def __init__(self, name, size, widths, capheight, descender):
+        self.name = name
+        self.size = size
+        self.widths = widths
+        self.capheight = capheight * size
+        self.descender = descender * size
+
+    def write_define(self, f):
+        f.write("/" + self.name + " findfont dup length dict begin {\n\
+  1 index /FID ne {def} {pop pop} ifelse\n\
+} forall\n\
+/Encoding[StandardEncoding aload pop]dup 45/minus put def\n\
+currentdict end /" + self.name + ".TCPscape exch definefont pop\n")
+
+    def write_select(self, f):
+        f.write("/" + self.name + ".TCPscape " + str(self.size) + " selectfont\n")
+
+    def height(self):
+        return self.capheight
+        
+    def extents(self, str):
+        w = reduce(lambda x, y: x + self.widths[ord(y)], str, 0)
+        if w == 0:
+            return (0, 0, 0)
+        elif re.match("^[A-Z0-9]*$", str):
+            return (w * self.size / 1000., self.capheight, 0)
+        else:
+            return (w * self.size / 1000., self.capheight, self.descender)
+
+
+class Helvetica(PostScriptFont):
+    
+    WIDTHS = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 584, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 278, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 333, 556, 556, 167, 556, 556, 556, 556, 238, 500, 556, 333, 333, 611, 611, 0, 556, 556, 556, 278, 0, 556, 350, 278, 500, 500, 556, 1000, 1000, 0, 611, 0, 333, 333, 333, 333, 333, 333, 333, 333, 0, 333, 333, 0, 333, 333, 333, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1000, 0, 370, 0, 0, 0, 0, 611, 778, 1000, 365, 0, 0, 0, 0, 0, 889, 0, 0, 0, 278, 0, 0, 278, 611, 944, 611, 0, 0, 0, 0)
+
+    def __init__(self, size=0):
+        PostScriptFont.__init__(self, "Helvetica", size, self.WIDTHS, 0.718, 0.225)
+
+
+class HelveticaBold(PostScriptFont):
+    
+    WIDTHS = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 584, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 222, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 333, 556, 556, 167, 556, 556, 556, 556, 191, 333, 556, 333, 333, 500, 500, 0, 556, 556, 556, 278, 0, 537, 350, 222, 333, 333, 556, 1000, 1000, 0, 611, 0, 333, 333, 333, 333, 333, 333, 333, 333, 0, 333, 333, 0, 333, 333, 333, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1000, 0, 370, 0, 0, 0, 0, 556, 778, 1000, 365, 0, 0, 0, 0, 0, 889, 0, 0, 0, 278, 0, 0, 222, 611, 944, 611, 0, 0, 0, 0)
+
+    def __init__(self, size=0):
+        PostScriptFont.__init__(self, "Helvetica-Bold", size, self.WIDTHS, 0.718, 0.225)
+
+
+class PlotCanvas_PostScriptDrawable:
+
+    FONT = Helvetica
+    LEGEND_FONT = HelveticaBold
+
+    PPD_PAPER_SIZES = { (612, 792): "Letter",
+                        (792, 612): "LetterRotated",
+                        (612, 1008): "Legal",
+                        (842, 1191): "A3",
+                        (595, 842): "A4",
+                        (420, 595): "A5" }
+
+    ANCHOR_OFFSET = { ANCHOR_N: (0, 4, -0.5, 0), ANCHOR_E: (-4, 0, -1, -0.5),
+                      ANCHOR_S: (0, -4, -0.5, -1.3) }
+
+    def __init__(self, plotcanvas, options):
+        self.plotcanvas = plotcanvas
+        self.cur_font = None
+        self.cur_gc = None
+        self.options = options
+
+    def gc(self, name):
+        return name
+
+    def layout(self, name=""):
+        if name == "small":
+            return self.FONT(8)
+        elif name == "":
+            return self.FONT(12)
+        elif name == "flags":
+            return self.LEGEND_FONT(8)
+        elif name == "legend":
+            return self.LEGEND_FONT(12)
+        elif name == "title":
+            return self.LEGEND_FONT(14)
+        elif name == "subtitle":
+            return self.FONT(12)
+        else:
+            return None
+
+    def prepare(self):
+        if self.options["dest"] == PRINT_PRINTER:
+            f = self.f = os.popen(self.options["command"], "w")
+        else:
+            f = self.f = open(self.options["file"], "w")
+
+        papersize = self.options["papersize"]
+        eps = (self.options["dest"] == PRINT_EPSFILE)
+        margins = self.options["margins"]
+        if eps: margins = (3, 3, 3, 3)
+
+        # determine initial bounds
+        if self.options["landscape"]:
+            self.bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
+            self.top = papersize[0]
+        else:
+            self.bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
+            self.top = papersize[1]
+        
+        f.write("%!PS-Adobe-3.0" + (eps and " EPSF-3.0" or "") + "\n\
+%%Creator: LCDF TCPscape\n\
+%%LanguageLevel: 2\n\
+%%Pages: 1\n")
+        bbx, bby = int(self.bounds[0]) - 3, int(self.top - self.bounds[1] - self.bounds[3]) - 3
+        f.write("%%%%BoundingBox: %d %d %d %d\n" % (bbx, bby, bbx + self.bounds[2] + 7.5, bby + self.bounds[3] + 7.5))
+        if self.options["landscape"] and not eps:
+            f.write("%%Orientation: Landscape\n")
+        if not eps:
+            f.write("%%DocumentMedia: ")
+            try: f.write(self.PPD_PAPER_SIZES[papersize])
+            except KeyError: f.write(`papersize[0]` + "ptx" + `papersize[1]` + "pt")
+            f.write(" " + `papersize[0]` + " " + `papersize[1]` + " 75 white ()\n")
+        f.write("%%EndComments\n\
+%%BeginProlog\n\
+%%BeginProcSet: LCDF-TCPscape 1.0 0\n")
+        self.FONT().write_define(f)
+        self.LEGEND_FONT().write_define(f)
+        f.write("/m/moveto load def/l{lineto stroke}bind def/L/lineto load def/rf/rectfill load def/rd/rectstroke load def/s/show load def\n")
+        for key in _postscript_style:
+            s = _postscript_style[key]
+            f.write("/GC" + key + "{" + str(s.red) + " " + str(s.green) + " " + str(s.blue) + " setrgbcolor " + str(s.linewidth) + " setlinewidth")
+            if len(s.dash):
+                f.write("[" + reduce(lambda x, y: str(x) + " " + str(y), s.dash) + "]0 setdash ")
+            else:
+                f.write("[]0 setdash ")
+            f.write("}bind def\n")
+        f.write("/Pd{moveto -2 0 rmoveto 4 0 rlineto 0 1 index rmoveto -4 0 rlineto 2 0 rmoveto 0 exch neg rlineto stroke}bind def\n\
+/Pa{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto stroke}bind def\n\
+/Pda{moveto -2 -2 rmoveto 4 4 rlineto 0 -4 rmoveto -4 4 rlineto 0 -2 rmoveto 4 0 rlineto -2 -2 rmoveto 0 4 rlineto stroke}bind def\n")
+        f.write("%%EndProcSet\n")
+
+        # page size
+        if not eps and papersize in self.PPD_PAPER_SIZES:
+            f.write("%%BeginSetup\n\
+%%IncludeFeature: *PaperSize " + self.PPD_PAPER_SIZES[papersize] + "\n\
+%%EndSetup\n")
+
+        # page
+        f.write("%%Page: 1 1\n")
+        if self.options["landscape"] and not eps:
+            f.write("90 rotate 0 -" + `self.options["papersize"][0]` + " translate\n")
+        self.cur_gc = None
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height) -- vertical opposite of PostScript coordinates
+        return self.bounds
+
+    def want(self, name):
+        return name == "shrinkwrap" or name == "axislabel" or name == "title"
+    
+    def legend(self, gc, layout, text, position):
+        b, allb = self.bounds, self.all_bounds
+        if position == "xaxis":
+            self.draw_text(gc, layout, text, b[0] + b[2]/2., allb[1] + allb[3] - 2 - layout.height(), ANCHOR_N)
+        elif position == "yaxis":
+            self.draw_text(gc, layout, text, allb[0] + layout.height() + 4, b[1] + b[3]/2., ANCHOR_S|ANCHOR_ROT)
+        elif position == "title":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., allb[1] - 6, ANCHOR_N)
+        elif position == "subtitle":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., b[1] - 6, ANCHOR_S)
+        else:
+            raise ValueError
+    
+    def complete(self):
+        self.f.write("showpage\n")
+        self.f.write("%%EOF\n")
+        self.f.close()
+        
+    def clip(self, gc, rectangle):
+        x, y, w, h = rectangle
+        self.f.write("gsave " + str(x) + ' ' + str(self.top - y - h) + ' ' + str(w) + ' ' + str(h) + " rectclip\n")
+
+    def unclip(self, gc):
+        self.f.write("grestore\n")
+
+    def clear(self):
+        pass
+
+    def select_gc(self, gc):
+        self.f.write("GC" + gc + "\n")
+        self.cur_gc = gc
+    
+    def select_font(self, font):
+        font.write_select(self.f)
+        self.cur_font = font
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x1) + " " + str(self.top - y1) + " m " + str(x2) + " " + str(self.top - y2) + " l\n")
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1:
+            if self.cur_gc is not gc: self.select_gc(gc)
+            s = " m\n"
+            for x, y in l:
+                self.f.write(str(x) + " " + str(self.top - y) + s)
+                s = " L\n"
+            self.f.write("stroke\n")
+
+    def fill_rectangle(self, gc, x, y, w, h):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        if w > 0 and h > 0:
+            self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rf\n")
+
+    def draw_rectangle(self, gc, x, y, w, h):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        if w > 0 and h > 0:
+            self.f.write(str(x) + " " + str(self.top - y - h) + " " + str(w) + " " + str(h) + " rd\n")
+
+    def anchor_offset(self, anchor):
+        return self.ANCHOR_OFFSET[anchor][0:2]
+
+    def draw_text(self, gc, font, text, x, y, anchor=ANCHOR_N):
+        if self.cur_font is not font: self.select_font(font)
+        if self.cur_gc is not gc: self.select_gc(gc)
+        w, h, d = font.extents(text)
+        xoff, yoff, xamt, yamt = self.ANCHOR_OFFSET[anchor & ~ANCHOR_ROT]
+        if anchor & ANCHOR_ROT:
+            self.f.write("gsave " + str(x) + " " + str(self.top - y) + " translate 90 rotate\n")
+            x = 0; y = self.top
+        self.f.write(str(x + w*xamt + xoff) + " " + str(self.top - (y + h*(yamt + 1) + yoff)) + " m(" + text + ")s\n")
+        if anchor & ANCHOR_ROT:
+            self.f.write("grestore\n")
+
+    def text_size(self, font, text):
+        return font.extents(text)
+
+    def draw_data(self, gc, x, y1, y2):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(y1 - y2) + " " + str(x) + " " + str(self.top - y1) + " Pd\n")
+
+    def draw_ack(self, gc, x, y):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x) + " " + str(self.top - y) + " Pa\n")
+    
+    def draw_dataack(self, gc, x, y):
+        if self.cur_gc is not gc: self.select_gc(gc)
+        self.f.write(str(x) + " " + str(self.top - y) + " Pda\n")
+
+
+
+class PlotCanvas_MetaPostDrawable:
+
+    FONT = Helvetica
+    LEGEND_FONT = HelveticaBold
+
+    PPD_PAPER_SIZES = { (612, 792): "Letter",
+                        (792, 612): "LetterRotated",
+                        (612, 1008): "Legal",
+                        (842, 1191): "A3",
+                        (595, 842): "A4",
+                        (420, 595): "A5" }
+
+    ANCHOR_NAME = { ANCHOR_N: "bot", ANCHOR_E: "lft", ANCHOR_S: "top",
+                    ANCHOR_S|ANCHOR_ROT: "lft" }
+
+    def __init__(self, plotcanvas, options):
+        self.plotcanvas = plotcanvas
+        self.options = options
+        self.style = { }
+        if not options["links"]: self.style["link"] = None
+        if not options["rcvwnd"]: self.style["window"] = None
+
+    def gc(self, name):
+        if name in self.style:
+            return self.style[name]
+        return _postscript_style[name]
+
+    def layout(self, name=""):
+        if name == "small":
+            return ("\\small{", "}")
+        elif name == "{":
+            return ("", "")
+        elif name == "flags":
+            return ("\\small{\\textbf{", "}}")
+        elif name == "legend":
+            return ("\\textbf{", "}")
+        elif name == "title":
+            return ("\\large{\\textbf{", "}}")
+        elif name == "subtitle":
+            return ("", "")
+        else:
+            return None
+
+    def prepare(self):
+        if self.options["dest"] == PRINT_PRINTER:
+            f = self.f = os.popen(self.options["command"], "w")
+        else:
+            f = self.f = open(self.options["file"], "w")
+
+        papersize = self.options["windowsize"]
+        margins = self.options["margins"]
+
+        # determine initial bounds
+        if self.options["landscape"]:
+            self.bounds = (margins[3], margins[0], papersize[1] - margins[1] - margins[3], papersize[0] - margins[0] - margins[2])
+            self.top = papersize[0]
+        else:
+            self.bounds = (margins[0], margins[1], papersize[0] - margins[0] - margins[2], papersize[1] - margins[1] - margins[3])
+            self.top = papersize[1]
+
+        f.write("""prologues := 1;
+linejoin := mitered;
+linecap := squared;
+verbatimtex %&latex
+\\documentclass[10pt]{article}
+\\begin{document}
+etex;
+
+datawid = 3; ackwid = 2;
+labeloffset := 5;
+picture clipper;
+
+def Sdata = withcolor (1, 0, 0) withpen pencircle scaled 0.5 enddef;
+def Sdataundelivered = withcolor .2white withpen pencircle scaled 1.5 enddef;
+def Sack = withcolor (0.42, 0.56, 0.14) withpen pencircle scaled 0.5 enddef;
+def Sdataack = withcolor (0, 0, 1) withpen pencircle scaled 0.5 enddef;
+
+def datapath(expr x, y, yy) =
+  (x-datawid,y) -- (x+datawid,y) -- (x, y) -- (x, yy) -- (x-datawid,yy) -- (x+datawid,yy)
+enddef;
+
+def ackpath(expr x, y) =
+  (x-ackwid,y - ackwid) -- (x+ackwid,y + ackwid) -- (x,y) -- (x-ackwid,y+ackwid) -- (x+ackwid,y-ackwid)
+enddef;
+
+def dataackpath(expr x, y) =
+  (x-ackwid,y - ackwid) -- (x+ackwid,y+ackwid) -- (x,y) -- (x-ackwid,y+ackwid) -- (x+ackwid,y-ackwid) -- (x,y) -- (x+(ackwid+1),y) -- (x-(ackwid+1),y) -- (x,y) -- (x,y-(ackwid+1)) -- (x,y+(ackwid+1))
+enddef;
+
+beginfig(1);
+""")
+
+	self.clipped = None
+
+    def plot_bounds(self):              # returns (left_margin, top_margin, width, height) -- vertical opposite of PostScript coordinates
+        return self.bounds
+
+    def want(self, name):
+        return name == "shrinkwrap" or name == "axislabel"
+    
+    def legend(self, gc, layout, text, position):
+        b, allb = self.bounds, self.all_bounds
+        if position == "xaxis":
+            self.draw_text(gc, layout, text, b[0] + b[2]/2., allb[1] + allb[3] - 2 - layout.height(), ANCHOR_N)
+        elif position == "yaxis":
+            self.draw_text(gc, layout, text, allb[0] + layout.height() + 4, b[1] + b[3]/2., ANCHOR_S|ANCHOR_ROT)
+        elif position == "title":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., allb[1] - 6, ANCHOR_N)
+        elif position == "subtitle":
+            self.draw_text(gc, layout, text, allb[0] + allb[2]/2., b[1] - 6, ANCHOR_S)
+        else:
+            raise ValueError
+    
+    def complete(self):
+        self.f.write("endfig;\n\nend\n")
+        self.f.close()
+        
+    def clip(self, gc, rectangle):
+        if self.clipped is None:
+            self.clipped = rectangle
+            self.f.write("  clipper := currentpicture; currentpicture := nullpicture;\n")
+        elif self.clipped != rectangle:
+            raise ValueError
+
+    def unclip(self, gc):
+        if self.clipped is None:
+            return
+        x, y, w, h = self.clipped
+        self.clipped = None
+        self.f.write("  clip currentpicture to (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle;\n")
+        self.f.write("  addto clipper also currentpicture; currentpicture := clipper;\n")
+
+    def clear(self):
+        pass
+
+    def mp_color(self, gc):
+        return "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
+    
+    def mp_style(self, gc):
+        if gc.mpstyle is not None:
+            return gc.mpstyle
+        s = "withcolor (" + str(gc.red) + ", " + str(gc.green) + ", " + str(gc.blue) + ")"
+        if len(gc.dash):
+            pass
+        if gc.linewidth != 1:
+            s = "withpen pencircle scaled " + str(gc.linewidth) + " " + s
+        return s
+    
+    def draw_line(self, gc, x1, y1, x2, y2):
+        self.f.write("  draw (" + str(x1) + ", " + str(self.top - y1) + ") -- (" + str(x2) + ", " + str(self.top - y2) + ") " + self.mp_style(gc) + ";\n")
+
+    def draw_lines(self, gc, l):
+        if len(l) > 1:
+            s = "  draw ("
+            for x, y in l:
+                self.f.write(s + str(x) + ", " + str(self.top - y))
+                s = ")\n    -- ("
+            self.f.write(") " + self.mp_style(gc) + ";\n")
+
+    def fill_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.f.write("  fill (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle " + self.mp_color(gc) + ";\n")
+
+    def draw_rectangle(self, gc, x, y, w, h):
+        if w > 0 and h > 0:
+            self.f.write("  draw (" + str(x) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y - h) + ") -- (" + str(x + w) + ", " + str(self.top - y) + ") -- (" + str(x) + ", " + str(self.top - y) + ") -- cycle " + self.mp_style(gc) + ";\n")
+
+    def anchor_offset(self, anchor):
+        return (0, 0)
+
+    def draw_text(self, gc, font, text, x, y, anchor=ANCHOR_N):
+        if font is None: font = ("", "")
+        self.f.write("  label." + self.ANCHOR_NAME[anchor] + "(btex " + font[0] + text + font[1] + " etex");
+        if anchor & ANCHOR_ROT:
+            self.f.write(" rotated 90");
+        self.f.write(", (" + str(x) + ", " + str(self.top - y) + "));\n");
+
+    def text_size(self, font, text):
+        return (len(text) * 5.56, 8.5, 1.5)
+
+    def draw_data(self, gc, x, y1, y2):
+        self.f.write("  draw datapath(" + str(x) + ", " + str(self.top - y1) + ", " + str(self.top - y2) + ") " + self.mp_style(gc) + ";\n")
+
+    def draw_ack(self, gc, x, y):
+        self.f.write("  draw ackpath(" + str(x) + ", " + str(self.top - y) + ") " + self.mp_style(gc) + ";\n")
+    
+    def draw_dataack(self, gc, x, y):
+        self.f.write("  draw dataackpath(" + str(x) + ", " + str(self.top - y) + ") " + self.mp_style(gc) + ";\n")
+
+
+####################
+# PlotCanvas
+#
+
+class PlotCanvas:
+
+    TOOL_NONE = 0
+    TOOL_HAND = 1
+    TOOL_ZOOM_IN = 2
+    TOOL_ZOOM_OUT = 3
+    TOOL_GRABHAND = 4
+    TOOL_IDENTIFY = 5
+    TOOL_ZOOM_DRAG = 6
+    _tool_cursor = ("", "hand", "zoomin", "zoomout", "grabhand", "", "zoomdrag")
+
+    DRAG_STICKINESS = 5
+    IDENTIFY_MAGNETISM = 24
+    DRAG_MAGNETISM = 12
+    
+    # initialization
+    def __init__(self, master, width=900, height=600):
+        self.canvas = gtk.DrawingArea()
+        self.canvas.set_double_buffered(False) # we do our own
+        self.canvas.set_flags(gtk.CAN_FOCUS)
+
+        self.canvas.connect("configure_event", self.cmd_configure)
+        self.canvas.connect("expose_event", self.cmd_expose)
+        self.canvas.connect("button_press_event", self.cmd_press)
+        self.canvas.connect("motion_notify_event", self.cmd_motion)
+        self.canvas.connect("button_release_event", self.cmd_release)
+        self.canvas.connect("key_press_event", self.cmd_check_state_focus)
+        self.canvas.connect("key_release_event", self.cmd_key_release)
+        self.canvas.connect("enter_notify_event", self.cmd_check_state)
+        self.canvas.set_events(gtk.gdk.EXPOSURE_MASK | gtk.gdk.BUTTON_PRESS_MASK | gtk.gdk.BUTTON_RELEASE_MASK | gtk.gdk.ENTER_NOTIFY_MASK | gtk.gdk.LEAVE_NOTIFY_MASK | gtk.gdk.KEY_PRESS_MASK | gtk.gdk.KEY_RELEASE_MASK | gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.POINTER_MOTION_HINT_MASK)
+        
+        self.conn = None
+        
+        self.left_margin = 4
+        self.right_margin = 4
+        self.top_margin = 0
+        self.bottom_margin = 0
+        self.plotted = False
+        self.configured = False
+        self.press = None
+        self.press_state = 0
+        self.tool = PlotCanvas.TOOL_IDENTIFY
+        self.show_tool = PlotCanvas.TOOL_NONE
+        self.begin = 0
+        self.end = 1000000000.0
+        self.beginseq = None
+        self.endseq = None
+        self.zoom_stack = []
+        self.show_window = True
+        self.backing_store = None
+        self.backing_store_updated = False
+
+        self.screen_drawable = PlotCanvas_ScreenDrawable(self)
+        self.immediate_screen_drawable = PlotCanvas_ScreenDrawable(self, True)
+
+        self.lit_main = [None, None]
+        self._draw_lit_main = [None, None]
+        self.lit = {}
+        self._draw_lit = {}
+        self.highlight = [None]
+        self._draw_highlight = [None]
+        self.highlight_bounds = None
+        self.highlight_hooks = []
+        
+        self.adjustment = gtk.Adjustment()
+        self.adjustment.connect("value_changed", self.adj_value_changed)
+        self.adjusting = False
+
+        master.pack_start(self.canvas, expand=1, fill=1, padding=4)
+        self.canvas.show()
+
+    # getting properties
+    def get_direction(self):
+        return self.dir
+    def get_flowref(self):
+        return FlowRef(self.conn, self.dir)
+    def get_plotted_time_range(self):
+        if self.plotted:
+            return self.plotted_time_range
+        else:
+            return self.begin, self.end
+    def get_time_adjustment(self):
+        return self.adjustment
+    def get_show_window(self):
+        return self.show_window
+    def get_lit_link(self):
+        pd = self.lit.get("H.link", [])
+        if len(pd) == 0:
+            return None
+        else:
+            return pd[0]
+
+    # setting properties
+    def set_flowref(self, fref, keeptime=False):
+        self.conn, self.dir = fref.conn, fref.dir
+        self.lit_main = [None, None]
+        self.lit = {}
+        self.highlight = [None]
+        self.highlight_bounds = None
+        self.beginseq = self.endseq = None
+        self.zoom_stack = []
+        if keeptime:
+            self.plot()
+        else:
+            self.view_all()
+    def set_show_window(self, show_window):
+        self.show_window = show_window
+        if self.configured: self.plot()
+    def view_all(self):
+        self.set_time_range(None, interval=1000000000.0, incr=False)
+    def set_time_range(self, begin, interval=None, incr=True):
+        true_begin = max(self.conn.get_time_range()[0] - 0.001, 0)
+        true_end = self.conn.get_time_range()[1]
+        
+        if begin is None: begin = true_begin
+        if interval is None: interval = self.end - self.begin
+
+        old_begin, old_end = self.begin, self.end
+        self.end = min(max(begin, 0) + interval, true_end)
+        self.begin = max(min(begin, self.end - interval), 0)
+        if incr and self.begin == old_begin and self.end == old_end: return
+
+        self.highlight = [None]
+        if self.configured: self.plot()
+
+        # now, emit changed values onto the adjustment
+        begin, end = self.get_plotted_time_range()
+        self.adjusting = True
+        a = self.adjustment
+        ps = float(end - self.begin)
+        a.set_all(value=self.begin, lower=float(true_begin), upper=float(max(end, true_end)), step_increment=ps * 0.03, page_increment=ps * 0.7, page_size=ps)
+        self.adjusting = False
+    def adj_value_changed(self, adj):
+        if not self.adjusting:
+            self.beginseq = self.endseq = None
+            self.set_time_range(adj.value)
+    
+    def zoom(self, when=None, factor=1):
+        self.zoom_stack.append((self.begin, self.end, self.beginseq, self.endseq))
+        if when is None:
+            when = (self.begin + self.end) / 2
+        new_dt = (self.end - self.begin) * factor
+        t0, t1 = self.get_plotted_time_range()
+        new_t0 = max(when - new_dt * ((when - t0) / (t1 - t0)), 0)
+        self.beginseq = self.endseq = None
+        self.set_time_range(new_t0, new_dt)
+
+    def grab_focus(self):
+        self.canvas.grab_focus()
+
+    # selecting tools
+    def select_tool(self, which):
+        self.tool = which
+        self._check_tool(self.canvas.window.get_pointer()[2])
+
+    def cmd_configure(self, widget, event):
+        x, y, self.wwidth, self.wheight = widget.get_allocation()
+        self.backing_store = gtk.gdk.Pixmap(widget.window, self.wwidth, self.wheight)
+        self.backing_store_updated = False
+        self.configured = True
+        self.immediate_screen_drawable.prepare()
+
+        # set margins from layout
+        self.plot_width = self.wwidth - self.left_margin - self.right_margin
+        self.plot_height = self.wheight - self.top_margin - self.bottom_margin
+        self._check_tool(0)
+        
+    def cmd_expose(self, widget, event):
+        if not self.backing_store_updated:
+            self.plot()
+        else:
+            self.expose_rectangle(event.area)
+        if self.highlight[0] is not None:
+            self.draw_highlight()
+    def expose_rectangle(self, area):
+        x, y, w, h = map(int, area)
+        if not self.backing_store_updated:
+            self.plot()
+        elif w > 0 and h > 0:
+            gc = self.canvas.get_style().black_gc
+            self.canvas.window.draw_drawable(gc, self.backing_store, x, y, x, y, w, h)
+
+    # Transformation
+    def _itransform(self, x, y, constrain=True):
+        if self.plotted and (not constrain or (x >= self.left_margin and x <= self.left_margin + self.plot_width and y >= self.top_margin and y <= self.top_margin + self.plot_height)):
+            return (x - self.toff) / self.tscale, (y - self.soff) / self.sscale
+        else:
+            raise ValueError
+    def _transform(self, xx, yy, yy2=None):
+        if not self.plotted:
+            raise ValueError
+        elif yy2 is None:
+            return xx * self.tscale + self.toff, yy * self.sscale + self.soff
+        else:
+            return xx * self.tscale + self.toff, yy * self.sscale + self.soff, yy2 * self.sscale + self.soff
+    def _transform_packet(self, p, dir=None, top=False):
+        if type(p) == types.TupleType:
+            p, dir = p
+        if dir == self.dir:
+            if top:
+                return self._transform(p.time, p.last_seq)
+            else:
+                return self._transform(p.time, p.seq)
+        else:
+            return self._transform(p.time, p.ack)
+    
+    def cmd_press(self, widget, event):
+        if event.button == 1:
+            self.press_state = event.state | gtk.gdk.BUTTON1_MASK
+        elif event.button == 3:
+            self.press_state = event.state | gtk.gdk.BUTTON3_MASK
+        self._check_tool(self.press_state)
+        try:
+            self._itransform(event.x, event.y) # for signal
+            self.press = (event.x, event.y)
+        except ValueError:
+            self.press = None
+        self.stuck = True
+        self.grab_focus()
+        return 1
+    
+    def cmd_motion(self, widget, event):
+        x, y, state = widget.window.get_pointer()
+        try:
+            # locate and light up closest packet
+            # prefer current direction during a drag
+            dir = None
+            button = (state & (gtk.gdk.BUTTON1_MASK | gtk.gdk.BUTTON3_MASK)) != 0
+            if button and self.lit_main[0] is not None:
+                dir = self.lit_main[0][1]
+            self.lit_main[button] = self.closest_packet(x, y, mindist=(button and PlotCanvas.DRAG_MAGNETISM or PlotCanvas.IDENTIFY_MAGNETISM), dir=dir)
+            self.highlight = ['lit_packet']
+            if not button and self.lit_main[0] != self._draw_lit_main[0]:
+                self.sublight_matchers()
+
+            if self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and self.press is not None:
+                if self.stuck and max(abs(self.press[0] - x), abs(self.press[1] - y)) > PlotCanvas.DRAG_STICKINESS:
+                    self.stuck = False
+                if not self.stuck:
+                    x0, y0 = self.press
+                    if self.lit_main[0] is not None:
+                        x0, y0 = self._transform_packet(self.lit_main[0], top=False)
+                    if self.lit_main[1] is not None:
+                        x, y = self._transform_packet(self.lit_main[1], top=True)
+                    t0, s0 = self._itransform(x0, y0)
+                    t, s = self._itransform(x, y, constrain=False)
+                    self.highlight = ["box", t0, s0, t, s]
+            elif self.show_tool == PlotCanvas.TOOL_GRABHAND and self.plotted and self.press is not None:
+                if self.stuck and (abs(self.press[0] - x) > PlotCanvas.DRAG_STICKINESS):
+                    self.stuck = False
+                    self.drag_t0 = self.get_plotted_time_range()[0]
+                    self.drag_tscale = self.tscale
+                if not self.stuck:
+                    shift_x = (x - self.press[0]) / self.drag_tscale
+                    self.set_time_range(self.drag_t0 - shift_x)
+            elif self.tool == PlotCanvas.TOOL_IDENTIFY:
+                if (state & gtk.gdk.BUTTON1_MASK) and self.press is not None and self.show_tool == PlotCanvas.TOOL_IDENTIFY:
+                    x0, y0 = self.press
+                    if self.lit_main[0] is not None:
+                        x0, y0 = self._transform_packet(self.lit_main[0], top=True)
+                    if self.lit_main[1] is not None:
+                        x, y = self._transform_packet(self.lit_main[1], top=True)
+                    t0, s0 = self._itransform(x0, y0)
+                    t, s = self._itransform(x, y, constrain=False)
+                    h = ["bandwidth", 0, t0, s0, t, s]
+                    if t0 != t: h[1] = (s - s0) / (t - t0)
+                    self.highlight = h
+            
+            self.highlight_changed()
+        except ValueError:
+            pass
+        return 1
+    
+    def cmd_release(self, widget, event):
+        try:
+            if (event.button != 1 and event.button != 3) or self.press is None:
+                pass
+            else:
+                old_highlight = self.highlight
+                self.lit_main[0] = self.lit_main[1]
+                self.lit_main[1] = None
+                self.highlight = ['lit_packet']
+                self.sublight_matchers()
+                
+                if self.show_tool == PlotCanvas.TOOL_ZOOM_OUT:
+                    when = self._itransform(event.x, event.y)[0]
+                    self.zoom(when, 4)
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_IN:
+                    when = self._itransform(event.x, event.y)[0]
+                    self.zoom(when, 0.25)
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and not self.stuck:
+                    crap, t0, s0, t1, s1 = old_highlight
+                    dt, ds = abs(t0 - t1), abs(s0 - s1)
+                    t0, s0 = min(t0, t1), min(s0, s1)
+                    self.zoom_stack.append((self.begin, self.end, self.beginseq, self.endseq))
+                    self.beginseq = s0
+                    self.endseq = s0 + ds
+                    self.set_time_range(t0, interval=dt)
+                elif self.show_tool == PlotCanvas.TOOL_ZOOM_DRAG and len(self.zoom_stack):
+                    t0, t1, self.beginseq, self.endseq = self.zoom_stack.pop()
+                    self.set_time_range(t0, t1 - t0)
+                    
+                self.highlight_changed()
+        except ValueError:
+            pass
+        self._check_tool(self.canvas.window.get_pointer()[2])
+        self.press = None
+        return 1
+    def _check_tool(self, state):
+        t = self.tool
+        if t == PlotCanvas.TOOL_HAND or t == PlotCanvas.TOOL_IDENTIFY:
+            if state & (gtk.gdk.BUTTON1_MASK | gtk.gdk.BUTTON3_MASK):
+                state = self.press_state
+            if state is None:
+                pass
+            elif state & gtk.gdk.BUTTON3_MASK:
+                t = PlotCanvas.TOOL_ZOOM_DRAG
+            elif state & gtk.gdk.MOD1_MASK:
+                t = PlotCanvas.TOOL_ZOOM_OUT
+            elif state & gtk.gdk.CONTROL_MASK:
+                t = PlotCanvas.TOOL_ZOOM_IN
+        if t == PlotCanvas.TOOL_HAND and state & gtk.gdk.BUTTON1_MASK:
+            t = PlotCanvas.TOOL_GRABHAND
+        if t != self.show_tool:
+            self.show_tool = t
+            self.canvas.window.set_cursor(PlotCursors(self.canvas)[PlotCanvas._tool_cursor[t]])
+    def cmd_check_state(self, widget, event):
+        self._check_tool(widget.window.get_pointer()[2])
+        return 1
+    def cmd_check_state_focus(self, widget, event):
+        self._check_tool(widget.window.get_pointer()[2])
+        self.grab_focus()
+        return 1
+    def cmd_key_release(self, widget, event):
+        if event.keyval == KEY_ESCAPE:
+            self.highlight = ['lit_packet']
+            self.sublight_matchers()
+            self.press = self.press_state = None
+            self.highlight_changed()
+        return self.cmd_check_state_focus(widget, event)
+
+    # IDENTIFY tool
+    def closest_packet(self, x0, y0, mindist=IDENTIFY_MAGNETISM, dir=None):
+        try:
+            t0, t1 = self.get_plotted_time_range()
+            t = self._itransform(x0, y0, constrain=False)[0]
+            delta = mindist / self.tscale
+            tscale, toff, sscale, soff = self.tscale, self.toff, self.sscale, self.soff
+            
+            found_data = found_ack = None
+            best_dist_data = best_dist_ack = mindist ** 2
+            for p in self.conn.packets(self.dir, max(t - delta, t0), min(t + delta, t1)):
+                x, y1, y2 = p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff
+                dist = (x - x0) ** 2
+                if y0 > y1: dist += (y0 - y1) ** 2
+                elif y0 < y2: dist += (y0 - y2) ** 2
+                if dist < best_dist_data:
+                    found_data = p; best_dist_data = dist
+
+            for p in self.conn.packets(1 - self.dir, max(t - delta, t0), min(t + delta, t1)):
+                x, y = p.time * tscale + toff, p.ack * sscale + soff
+                dist = (x - x0) ** 2 + (y - y0) ** 2
+                if dist < best_dist_ack:
+                    found_ack = p; best_dist_ack = dist
+
+            if dir == self.dir: best_dist_ack *= 2.75
+            elif dir == 1 - self.dir: best_dist_data *= 2.75
+            if found_data is not None and best_dist_data < best_dist_ack:
+                return (found_data, self.dir)
+            elif found_ack is not None:
+                return (found_ack, 1 - self.dir)
+            else:
+                return None
+        except ValueError:
+            return None
+
+    def _add_lit(self, name, pd):
+        self.lit.setdefault(name, []).append(pd)
+    
+    def sublight_matchers(self):
+        self.lit = {}
+        self.lit_packets_effect = []
+        if self.lit_main[0] == None: return
+        p, dir = self.lit_main[0]
+        t0, t1 = self.get_plotted_time_range()
+        if dir == self.dir:
+            for l in self.conn.links(dir, t0, t1):
+                if abs(l.t0 - p.time) < 0.000001:
+                    pp = self.conn.find_packet(l.t1, 1 - dir)
+                    if pp is not None:
+                        self._add_lit("H.link", (pp, 1 - dir))
+            for pp in self.conn.packets(dir, t0, t1):
+                if pp.seq <= p.seq and pp.last_seq >= p.last_seq and pp is not p:
+                    self._add_lit("H.dup", (pp, dir))
+            for pp in self.conn.packets(1 - dir, t0, t1):
+                if pp.time <= p.time:
+                    if pp.ack == p.seq:
+                        self._add_lit("H.cause", (pp, 1 - dir))
+                else:
+                    if pp.ack == p.last_seq:
+                        self._add_lit("H.effect", (pp, 1 - dir))
+        else:
+            for l in self.conn.links(self.dir, t0, t1):
+                if abs(l.t1 - p.time) < 0.000001:
+                    pp = self.conn.find_packet(l.t0, self.dir)
+                    if pp is not None:
+                        self._add_lit("H.link", (pp, self.dir))
+            for pp in self.conn.packets(self.dir, t0, t1):
+                if pp.time <= p.time:
+                    if pp.last_seq == p.ack:
+                        self._add_lit("H.cause", (pp, self.dir))
+                else:
+                    if pp.seq == p.ack:
+                        self._add_lit("H.effect", (pp, self.dir))
+            for pp in self.conn.packets(1 - self.dir, t0, t1):
+                if pp.ack == p.ack and pp is not p:
+                    self._add_lit("H.dup", (pp, 1 - self.dir))
+    
+
+    # drawing helpers
+    def _format_y_label(text):
+        if re.match(".*e\\+0[4-7]$", text):
+            text = str(float(text))[:-2]
+        if re.match("...*000$", text):
+            text = text[:-3] + "K"
+        return text
+    _format_y_label = staticmethod(_format_y_label)
+    def _draw_label_y(self, text, pos, edge1, edge2, drawable, gc, layout):
+        drawable.draw_text(gc, layout, self._format_y_label(text), edge1, pos, anchor=ANCHOR_E)
+    def _draw_label_x(self, text, pos, edge1, edge2, drawable, gc, layout):
+        drawable.draw_text(gc, layout, text, pos, edge2, anchor=ANCHOR_N)
+    def _draw_tic_x(self, pos, edge1, edge2, len, drawable, gc):
+        drawable.draw_line(gc, pos, edge1, pos, edge1 + len)
+        drawable.draw_line(gc, pos, edge2, pos, edge2 - len)
+    def _draw_tic_y(self, pos, edge1, edge2, len, drawable, gc):
+        drawable.draw_line(gc, edge1, pos, edge1 + len, pos)
+        drawable.draw_line(gc, edge2, pos, edge2 - len, pos)
+    def _draw_axis(self, scale, off, pos1, pos2, step, edge1, edge2, ticer, labeller, drawable, gc_tic, gc_label, playout):
+        if abs(step * scale) >= 75:
+            mstep = step / 10
+        else:
+            mstep = step / 4
+        for pos in frange(floor(pos1 / step) * step, pos2, step):
+            pix = pos * scale + off
+            if pos >= pos1:
+                ticer(pix, edge1, edge2, 5, drawable, gc_tic)
+                labeller("%g" % pos, pix, edge1, edge2, drawable, gc_label, playout)
+            for mpos in frange(pos + mstep, min(pos + step, pos2), mstep):
+                mpix = mpos * scale + off
+                if mpos >= pos1:
+                    ticer(mpix, edge1, edge2, 2, drawable, gc_tic)
+    def _y_labels(self, pos1, pos2, step):
+        l = []
+        for pos in frange(floor(pos1 / step) * step, pos2, step):
+            if pos >= pos1:
+                l.append(self._format_y_label("%g" % pos))
+        return l
+
+    def plot(self, drawable=None):
+        if drawable is None:
+            drawable = self.screen_drawable
+        
+        drawable.prepare()
+        drawable.clear()
+
+        if self.conn is not None:
+
+            # variables
+            playout = drawable.layout()
+            small_playout = drawable.layout("small")
+            flags_playout = drawable.layout("flags")
+
+            # initial plottable area
+            left_margin, top_margin, plot_width, plot_height = drawable.plot_bounds()
+            initial_left_margin, initial_width = left_margin, plot_width
+
+            # shrink plottable area by size of axis labels and possibly title
+            ylabel_w, label_h = drawable.text_size(playout, "6000K")[:2]
+            ylabel_w -= drawable.anchor_offset(ANCHOR_E)[0]
+            anchor_n = drawable.anchor_offset(ANCHOR_N)[1]
+            label_h += anchor_n
+            left_margin += ylabel_w; plot_width -= int(1.4*ylabel_w)
+            top_margin += int(label_h/2); plot_height -= int(1.5*label_h)
+            if drawable.want("axislabel"):
+                e = drawable.text_size(drawable.layout("legend"), "Sg")
+                h = e[1] + e[2] + anchor_n
+                left_margin += h; plot_width -= h; plot_height -= h + anchor_n
+            if drawable.want("title"):
+                e1 = drawable.text_size(drawable.layout("title"), "Sg")
+                e2 = drawable.text_size(drawable.layout("subtitle"), "Sg")
+                h = e1[1] + e1[2] + e2[1] + e2[2] + 3*anchor_n
+                top_margin += h; plot_height -= h
+
+            # analyze time ranges
+            ranges = fix_range(self.begin, self.end, 30.0 / plot_width)
+            t0, t1, tstep = ranges["low"], ranges["high"], ranges["step"]
+
+            # analyze sequence ranges
+            if self.beginseq is None:
+                s0, s1 = self.conn.get_seq_range(self.dir, t0, t1)
+            else:
+                s0, s1 = self.beginseq, self.endseq
+            if s1 <= s0: s0 = 0; s1 = 1
+            ranges = fix_range(s0, s1, 30.0 / plot_height)
+            s0, s1, sstep = ranges["low"], ranges["high"], ranges["step"]
+
+            # refine plottable area based on widths of sequence labels
+            if drawable.want("shrinkwrap"):
+                left_margin -= ylabel_w; plot_width += ylabel_w
+                ylabel_w = max(map(lambda x: drawable.text_size(playout, x)[0], self._y_labels(s0, s1, sstep))) - drawable.anchor_offset(ANCHOR_E)[0]
+                left_margin += ylabel_w; plot_width -= ylabel_w
+
+            # get transformation
+            tscale = plot_width / float(t1 - t0)
+            sscale = plot_height / float(s0 - s1)
+            toff = left_margin - (t0 * tscale)
+            soff = top_margin - (s1 * sscale)
+
+            # save screen information
+            if isinstance(drawable, PlotCanvas_ScreenDrawable):
+                self.tscale, self.sscale, self.toff, self.soff = tscale, sscale, toff, soff
+                self.plotted_time_range = (t0, t1)
+                self.plotted = True
+            
+            # clear background
+            drawable.fill_rectangle(drawable.gc("bg"), left_margin, top_margin, plot_width, plot_height)
+
+            # losses
+            gc = drawable.gc("lossborder")
+            for l in self.conn.losses(self.dir, t0, t1):
+                x0 = max(t0, l.begin) * tscale + toff
+                x1 = min(t1, l.end) * tscale + toff
+                y0 = max(s0, l.seq) * sscale + soff
+                y1 = min(s1, l.end_seq) * sscale + soff
+                gc_fg, gc_bg = drawable.gc(l.type), drawable.gc(l.type + ".bg")
+                drawable.fill_rectangle(gc_bg, x0, top_margin, x1 - x0 + 1, plot_height)
+                drawable.fill_rectangle(gc_fg, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+                drawable.draw_rectangle(gc, x0, y1, x1 - x0 + 1, y0 - y1 + 1)
+
+            # links
+            gc = drawable.gc('link')
+            if gc is not None:
+                drawable.clip(gc, (left_margin, top_margin, plot_width, plot_height))
+                for l in self.conn.links(self.dir, t0, t1):
+                    if l.s0 is not None and l.s1 is not None:
+                        x0 = l.t0 * tscale + toff
+                        x1 = l.t1 * tscale + toff
+                        y0 = l.s0 * sscale + soff
+                        y1 = l.s1 * sscale + soff
+                        drawable.draw_line(gc, x0, y0, x1, y1)
+                drawable.unclip(gc)
+            
+            # border box
+            border_gc = drawable.gc("border")
+            drawable.draw_rectangle(border_gc, left_margin, top_margin, plot_width, plot_height)
+
+            # axes
+            label_gc = drawable.gc("label")
+            self._draw_axis(tscale, toff, t0, t1, tstep, top_margin, top_margin + plot_height, self._draw_tic_x, self._draw_label_x, drawable, border_gc, label_gc, playout)
+            self._draw_axis(sscale, soff, s0, s1, sstep, left_margin, left_margin + plot_width, self._draw_tic_y, self._draw_label_y, drawable, border_gc, label_gc, playout)
+
+            # axis legends
+            if drawable.want("axislabel"):
+                legend_playout = drawable.layout("legend")
+                drawable.draw_text(label_gc, legend_playout, "Sequence number", left_margin - ylabel_w, top_margin + plot_height/2, ANCHOR_S|ANCHOR_ROT)
+                drawable.draw_text(label_gc, legend_playout, "Elapsed time (s)", left_margin + plot_width/2, top_margin + plot_height + label_h + anchor_n, ANCHOR_N)
+
+            # title
+            if drawable.want("title"):
+                lt, ls = drawable.layout("title"), drawable.layout("subtitle")
+                tt, ts = self.get_flowref().get_description(), self.get_flowref().get_filename()
+                drawable.draw_text(label_gc, ls, ts, initial_left_margin + initial_width/2, top_margin - anchor_n, ANCHOR_S)
+                es = drawable.text_size(ls, "Sg")
+                drawable.draw_text(label_gc, lt, tt, initial_left_margin + initial_width/2, top_margin - 2*anchor_n - es[1] - es[2], ANCHOR_S)
+
+            # ack packets
+            glyphrect = (left_margin-2, top_margin-2, plot_width+4, plot_height+4)
+            gc1, gc2 = drawable.gc("ack"), drawable.gc("dataack")
+            drawable.clip(gc1, glyphrect); drawable.clip(gc2, glyphrect)
+            last_dupack, last_dupack_x = -1, None
+            for p in self.conn.rev_packets(1 - self.dir, t0, t1):
+                x, y = int(floor(p.time * tscale + toff)), int(floor(p.ack * sscale + soff))
+                if p.dup_count > 1 and (p.ack != last_dupack or x < last_dupack_x):
+                    text = str(p.dup_count)
+                    w = drawable.text_size(small_playout, text)[0]
+                    if p.ack != last_dupack or x + w/2 < last_dupack_x:
+                        drawable.draw_text(label_gc, small_playout, text, x, y, anchor=ANCHOR_N)
+                        last_dupack = p.ack
+                        last_dupack_x = x - w/2 - 4
+                if p.pure_ack():
+                    drawable.draw_ack(gc1, x, y)
+                else:
+                    drawable.draw_dataack(gc2, x, y)
+            drawable.unclip(gc1); drawable.unclip(gc2)
+
+            # window line, if enabled
+            gc = drawable.gc("window")
+            if self.show_window and self.conn.has_window and gc is not None:
+                windows = []
+                for p in self.conn.packets(1 - self.dir, t0, t1, fuzz=1):
+                    x, y = int(p.time * tscale + toff), int((p.ack + p.window) * sscale + soff)
+                    windows.append((x, y))
+                drawable.clip(gc, (left_margin, top_margin, plot_width, plot_height))
+                drawable.draw_lines(gc, windows)
+                drawable.unclip(gc)
+
+            # data packets
+            gc1, gc2 = drawable.gc("data"), drawable.gc("data.undelivered")
+            drawable.clip(gc1, glyphrect); drawable.clip(gc2, glyphrect)
+            for p in self.conn.packets(self.dir, t0, t1):
+                if p.flags & TH_UNDELIVERED: 
+		    gc = gc2
+                else: 
+		    gc = gc1
+                drawable.draw_data(gc, p.time * tscale + toff, p.seq * sscale + soff, p.last_seq * sscale + soff)
+                if p.flags & (TH_SYN | TH_FIN | TH_RST):
+                    s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
+                    drawable.draw_text(label_gc, flags_playout, s, p.time * tscale + toff, p.last_seq * sscale + soff, anchor=ANCHOR_S)
+            drawable.unclip(gc1); drawable.unclip(gc2)
+            
+        else:
+            self.plotted = False
+
+        drawable.complete()
+
+
+    # higlights
+    def _highlight_packet_bg(self, pd, gctype="H"):
+        p, dir = pd
+        drawable = self.immediate_screen_drawable
+        gc = drawable.gc(gctype)
+        if dir == self.dir:
+            x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+            bounds = (x - 5, y2 - 5, 10, y1 - y2 + 10)
+            drawable.fill_rectangle(gc, bounds)
+        else:
+            x, y2 = self._transform(p.time, p.ack)
+            bounds = (x - 5, y2 - 5, 10, 10)
+            if p.dup_count > 0 and gctype == "H":
+                layout = drawable.layout("small")
+                w, h = drawable.text_size(layout, str(p.dup_count))[:2]
+                bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_N)[1] - 2, w + 4, h + 4))
+        if p.flags & (TH_SYN | TH_FIN | TH_RST):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
+            layout = drawable.layout("flags")
+            w, h = drawable.text_size(layout, s)[:2]
+            bounds = union_rectangle(bounds, (x - w/2 - 2, y2 + drawable.anchor_offset(ANCHOR_S)[1] - 2 - h, w + 4, h + 4))
+        drawable.fill_rectangle(gc, bounds)
+        return bounds
+        
+    def _highlight_packet_fg(self, pd, gctype="H"):
+        p, dir = pd
+        drawable = self.immediate_screen_drawable
+        if dir == self.dir:
+            x, y1, y2 = self._transform(p.time, p.seq, p.last_seq)
+            drawable.draw_data(drawable.gc("data." + gctype), x, y1, y2)
+        else:
+            x, y2 = self._transform(p.time, p.ack)
+            if p.pure_ack():
+                drawable.draw_ack(drawable.gc("ack." + gctype), x, y2)
+            else:
+                drawable.draw_dataack(drawable.gc("dataack." + gctype), x, y2)
+            if p.dup_count > 0 and gctype == "H":
+                layout = drawable.layout("small")
+                drawable.draw_text(drawable.gc("label"), layout, str(p.dup_count), x, y2, anchor=ANCHOR_N)
+        if p.flags & (TH_SYN | TH_FIN | TH_RST):
+            s = unparse_tcp_flags(p.flags & (TH_SYN | TH_FIN | TH_RST))
+            layout = drawable.layout("flags")
+            drawable.draw_text(drawable.gc("label"), layout, s, x, y2, anchor=ANCHOR_S)
+    
+    def draw_highlight(self):
+        bounds = None
+
+        h = self.highlight
+        if h[0] == 'bandwidth':
+            t0, s0, t1, s1 = h[2:6]
+            x0, y0 = self._transform(t0, s0)
+            x1, y1 = self._transform(t1, s1)
+            if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
+                b = (min(x0, x1) - 2, min(y0, y1), abs(x0 - x1) + 2, abs(y0 - y1) + 2)
+                drawable = self.immediate_screen_drawable
+                gc = drawable.gc("H")
+                drawable.draw_line(gc, x0, y0, x1, y1)
+                bounds = union_rectangle(bounds, b)
+        elif h[0] == 'box':
+            t0, s0, t1, s1 = h[1:5]
+            x0, y0 = self._transform(t0, s0)
+            x1, y1 = self._transform(t1, s1)
+            if abs(x0 - x1) > PlotCanvas.DRAG_STICKINESS or abs(y0 - y1) > self.DRAG_STICKINESS:
+                b = (min(x0, x1), min(y0, y1), abs(x0 - x1), abs(y0 - y1))
+                drawable = self.immediate_screen_drawable
+                gc = drawable.gc("H")
+                drawable.draw_rectangle(gc, b[0], b[1], b[2], b[3])
+                bounds = union_rectangle(bounds, expand_rectangle(b, 2))
+
+        # highlight packets
+        for name in ("H.cause", "H.dup", "H.effect", "H.link"):
+            for pd in self.lit.get(name, []):
+                bounds = union_rectangle(bounds, self._highlight_packet_bg(pd, name))
+        for name in ("H.cause", "H.dup", "H.effect", "H.link"):
+            for pd in self.lit.get(name, []):
+                self._highlight_packet_fg(pd, name)
+
+        # fill in highlights
+        for pd in self.lit_main:
+            if pd is not None:
+                bounds = union_rectangle(bounds, self._highlight_packet_bg(pd))
+        for pd in self.lit_main:
+            if pd is not None:
+                self._highlight_packet_fg(pd)
+        
+        self.highlight_bounds = expand_rectangle(bounds, 3)
+    
+    def erase_highlight(self):
+        if self.highlight_bounds is not None:
+            self.expose_rectangle(self.highlight_bounds)
+            self.highlight_bounds = None
+
+    def normalize_highlight(self):
+        h = self.highlight
+        if h is None:
+            self.highlight = [None]
+        elif h[0] == 'lit_packet':
+            if self.lit_main[0] is not None:
+                self.highlight = ['packet', self.lit_main[0][0], self.lit_main[0][1]]
+            else:
+                self.highlight = [None]
+
+    def highlight_changed(self):
+        self.normalize_highlight()
+        new_lit = self._draw_lit_main != self.lit_main
+        new_sublit = self._draw_lit != self.lit
+        new_high = self._draw_highlight != self.highlight
+        if new_lit or new_sublit or new_high:
+            self.erase_highlight()
+            self.draw_highlight()
+            self._draw_lit_main = list(self.lit_main)
+            self._draw_lit = dict(self.lit)
+            self._draw_highlight = list(self.highlight)
+            if new_high:
+                for f in self.highlight_hooks:
+                    f(self, self.highlight)
+
+    def add_highlight_hook(self, f):
+        self.highlight_hooks.append(f)
+
+
+####################
+# printing
+#
+
+class PrintOptionsDialog:
+
+    PAPER_SIZES = (
+        ( "US Letter (8.5x11\")", (612, 792) ),
+        ( "US Legal (8.5x14\")", (612, 1008) ),
+        ( "ISO A3 (297x420mm)", (842, 1191) ),
+        ( "ISO A4 (210x297mm)", (595, 842) ),
+        ( "ISO A5 (148x210mm)", (420, 595) ),
+        ( "Custom", (0, 0) )
+        )
+
+    def __init__(self, parentw, parent, options=None):
+        if options == None: options = _print_options
+        self.options = options
+        self.parent = parent
+        
+        self.dialog = dialog = gtk.Dialog(title='TCPscape Print', parent=parentw, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+        self.dialog.set_border_width(10)
+        dialog.vbox.set_spacing(10)
+        label_group = gtk.SizeGroup(gtk.SIZE_GROUP_HORIZONTAL)
+
+        # Printer frame
+        frame = gtk.Frame(label='Printer')
+        dialog.vbox.pack_start(frame)
+        table = gtk.Table(rows=3, columns=3)
+        table.set_row_spacings(5); table.set_col_spacings(7); table.set_border_width(5)
+        frame.add(table)
+
+        l = gtk.Label("Print To:")
+        l.set_alignment(1, 0.5)
+        label_group.add_widget(l)
+        table.attach(l, 0, 1, 0, 1)
+        
+        self.w_command_l = gtk.Label("Command:");
+        self.w_command_l.set_alignment(1, 0.5)
+        label_group.add_widget(self.w_command_l)
+        table.attach(self.w_command_l, 0, 1, 1, 2)
+
+        self.w_file_l = gtk.Label("File:");
+        self.w_file_l.set_alignment(1, 0.5)
+        label_group.add_widget(self.w_file_l)
+        table.attach(self.w_file_l, 0, 1, 2, 3)
+
+        # destination radio buttons
+        b = gtk.HBox(False, 10)
+        self.w_dest = [None, None, None, None]
+        self.w_dest[PRINT_PRINTER] = gtk.RadioButton(group=None, label='Printer')
+        self.w_dest[PRINT_FILE] = gtk.RadioButton(group=self.w_dest[0], label='File')
+        self.w_dest[PRINT_EPSFILE] = gtk.RadioButton(group=self.w_dest[0], label='EPS File')
+        self.w_dest[PRINT_MPFILE] = gtk.RadioButton(group=self.w_dest[0], label='MetaPost File')
+        self.w_dest[self.options["dest"]].set_active(True)
+        for i in range(4):
+            self.w_dest[i].connect("toggled", self.dest_toggled, i)
+            b.pack_start(self.w_dest[i], False, False)
+        table.attach(b, 1, 2, 0, 1)
+
+        # command entry
+        self.w_command = gtk.Entry()
+        self.w_command.set_text(options["command"])
+        table.attach(self.w_command, 1, 2, 1, 2)
+
+        # file entry
+        self.w_file = gtk.Entry()
+        self.w_file.set_text(options["file"])
+        table.attach(self.w_file, 1, 2, 2, 3)
+
+        self.w_choosefile = gtk.Button("Choose File...")
+        self.w_choosefile.connect("clicked", self.cmd_choosefile, 0)
+        table.attach(self.w_choosefile, 2, 3, 2, 3)
+
+        self.set_dest(self.options["dest"])
+
+        # Appearance frame
+        frame = gtk.Frame(label='Appearance')
+        dialog.vbox.pack_start(frame, True, True)
+        table = gtk.Table(rows=2, columns=3)
+        table.set_row_spacings(5); table.set_col_spacings(7); table.set_border_width(5)
+        frame.add(table)
+
+        l = gtk.Label("Color:")
+        l.set_alignment(1, 0.5)
+        label_group.add_widget(l)
+        table.attach(l, 0, 1, 0, 1, xoptions=0)
+        
+        l = gtk.Label("Paper Size:")
+        l.set_alignment(1, 0.5)
+        label_group.add_widget(l)
+        table.attach(l, 0, 1, 1, 2, xoptions=0)
+
+        l = gtk.Label("Plot Elements:")
+        l.set_alignment(1, 0.5)
+        label_group.add_widget(l)
+        table.attach(l, 0, 1, 2, 3, xoptions=0)
+
+        # color/grayscale
+        b = gtk.HBox(False, 10)
+        self.w_color = gtk.RadioButton(group=None, label='Color')
+        b.pack_start(self.w_color, False, False)
+        r = gtk.RadioButton(group=self.w_color, label='Grayscale')
+        if not options["color"]: r.set_active(True)
+        b.pack_start(r, False, False)
+        table.attach(b, 1, 2, 0, 1, xoptions=gtk.EXPAND|gtk.FILL)
+
+        # paper size
+        self.w_papersize = gtk.OptionMenu()
+        menu = gtk.Menu()
+        for x in self.PAPER_SIZES:
+            menu.append(gtk.MenuItem(x[0]))
+        self.w_papersize.set_menu(menu)
+        mapped_indices = filter(lambda x: self.PAPER_SIZES[x][1] == options["papersize"], range(len(self.PAPER_SIZES)))
+        if len(mapped_indices):
+            self.w_papersize.set_history(mapped_indices[0])
+        else:
+            self.w_papersize.set_history(len(self.PAPER_SIZES) - 1)
+        b = gtk.HBox(False, 10)
+        b.pack_start(self.w_papersize, False, False)
+        table.attach(b, 1, 3, 1, 2)
+
+        # plot elements
+        b = gtk.HBox(False, 10)
+        self.w_links = gtk.CheckButton(label='Ack Links')
+        self.w_links.set_active(options["links"])
+        b.pack_start(self.w_links, False, False)
+        self.w_rcvwnd = gtk.CheckButton(label='Receive Window')
+        self.w_rcvwnd.set_active(options["rcvwnd"])
+        b.pack_start(self.w_rcvwnd, False, False)
+        table.attach(b, 1, 2, 2, 3, xoptions=gtk.EXPAND|gtk.FILL)
+
+        # action area
+        ok = gtk.Button(stock=gtk.STOCK_PRINT)
+        ok.connect("clicked", self.cmd_done, 1)
+        dialog.action_area.pack_start(ok)
+        cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
+        cancel.connect("clicked", self.cmd_done, 0)
+        dialog.action_area.pack_start(cancel)
+        
+        dialog.show_all()
+
+    def set_dest(self, where):
+        self.w_file.set_sensitive(where != PRINT_PRINTER)
+        self.w_choosefile.set_sensitive(where != PRINT_PRINTER)
+        self.w_file_l.set_sensitive(where != PRINT_PRINTER)
+        self.w_command.set_sensitive(where == PRINT_PRINTER)
+        self.w_command_l.set_sensitive(where == PRINT_PRINTER)
+
+    def dest_toggled(self, widget, data=None):
+        if widget.get_active(): self.set_dest(data)
+
+    def cmd_choosefile(self, widget, data):
+        filew = gtk.FileSelection("File selection")
+        filew.set_filename(self.w_file.get_text())
+
+        filew.ok_button.connect("clicked", self.cmd_choosefile_ok, filew)
+        filew.cancel_button.connect("clicked", lambda w: filew.destroy())
+
+        filew.show()
+
+    def cmd_choosefile_ok(self, widget, filew):
+        self.w_file.set_text(filew.get_filename())
+        filew.destroy()
+        
+    def cmd_done(self, widget, data):
+        if data:                        # OK
+            for i in range(4):
+                if self.w_dest[i].get_active():
+                    self.options["dest"] = i
+            self.options["command"] = self.w_command.get_text()
+            self.options["file"] = self.w_file.get_text()
+            self.options["color"] = self.w_color.get_active()
+            self.options["papersize"] = self.PAPER_SIZES[self.w_papersize.get_history()][1]
+            self.options["windowsize"] = (self.parent.canvas.plot_height, self.parent.canvas.plot_width)
+            self.options["links"] = self.w_links.get_active()
+            self.options["rcvwnd"] = self.w_rcvwnd.get_active()
+            if not self.parent.cmd_print(widget, data, self.dialog):
+                return
+        self.dialog.destroy()
+
+
+
+####################
+# finding a specific flow
+#
+
+class FindFlowDialog:
+
+    def __init__(self, parentw, parent):
+        self.parent = parent
+        
+        self.dialog = dialog = gtk.Dialog(title='TCPscape Select Flow', parent=parentw, flags=gtk.DIALOG_DESTROY_WITH_PARENT)
+        self.dialog.set_border_width(10)
+        dialog.vbox.set_spacing(10)
+
+        # Printer frame
+        hbox = gtk.HBox()
+        l = gtk.Label("Flow:")
+        l.set_alignment(1, 0.5)
+        hbox.pack_start(l)
+
+        flowset = parent.get_flowset()
+        self.adjustment = gtk.Adjustment(value=parent.get_aggregate(), lower=flowset.min_aggregate, upper=flowset.max_aggregate, step_incr=1, page_incr=10)
+        self.w_aggregate = gtk.SpinButton(self.adjustment, 0.5)
+        hbox.pack_start(self.w_aggregate)
+
+        dialog.vbox.pack_start(hbox)
+        hbox.show_all()
+
+        # action area
+        ok = gtk.Button(stock=gtk.STOCK_OK)
+        ok.connect("clicked", self.cmd_done, 1)
+        dialog.action_area.pack_start(ok)
+        cancel = gtk.Button(stock=gtk.STOCK_CANCEL)
+        cancel.connect("clicked", self.cmd_done, 0)
+        dialog.action_area.pack_start(cancel)
+        
+        dialog.show_all()
+        
+    def cmd_done(self, widget, data):
+        if data:                        # OK
+            self.parent.set_flow(fref=self.parent.get_flowset().find_aggregate(self.w_aggregate.get_value_as_int()))
+        self.dialog.destroy()
+
+
+
+####################
+# status bar watcher
+#
+
+class StatusWatcher:
+
+    def __init__(self, statusline, progressbar):
+        self.statusline = statusline
+        self.progressbar = progressbar
+
+    def prepare(self, process, complete=None, text=None, markup=None):
+        self.process = process
+        self.process_function = process.process_function()
+        self.complete = complete
+        self.text = text
+        self.markup = markup
+
+    def run(self, process, **kw):
+        self.prepare(process, **kw)
+        if self.markup is not None:
+            self.statusline.set_markup(self.markup)
+        elif self.text is not None:
+            self.statusline.set_text(self.text)
+        try:
+            process.process_position()
+            self.progressbar.set_fraction(0)
+        except PulseProcess:
+            self.progressbar.pulse()
+        self.progressbar.show()
+        return idle_add(self.idle)
+
+    def idle(self):
+        try:
+            self.progressbar.set_fraction(self.process.process_position())
+        except PulseProcess:
+            self.progressbar.pulse()
+        if self.process_function is not None:
+            self.process_function = self.process_function()
+            return self.idle
+        else:
+            if self.complete is not None:
+                self.complete()
+            self.progressbar.hide()
+            return None
+
+
+
+####################
+# main window
+#
+
+class PlotFlowWindow:
+    
+    def __init__(self, fset):
+        self.flowset = fset
+        self.flowid = None
+        self.flowref = None
+        
+        self.window = win = gtk.Window()
+        win.connect('destroy', self.cmd_exit)
+        win.set_title("TCPscape")
+
+        vbox = gtk.VBox()
+        win.add(vbox)
+        vbox.show()
+
+        self._init_menus(win, vbox)
+        self._init_toolbar(win, vbox)
+
+        #paned = gtk.VPaned()
+        #vbox.add(paned)
+        #paned.show()
+        
+        plotbox = self._init_plotbox()
+        #flowtree = self._init_flowtree()
+
+        #paned.add1(plotbox)
+        #paned.add2(flowtree)
+
+        vbox.add(plotbox)
+
+        if len(fset):
+            self.set_flow(id=0)
+        #else:
+        #    self._activate_flow_items(None)
+
+        win.set_default_size(900, 660)
+        win.show()
+
+        self.canvas.grab_focus()
+
+    def _init_menus(self, win, vbox):
+        accel_group = gtk.AccelGroup()
+        self.item_factory = gtk.ItemFactory(gtk.MenuBar, "<main>", accel_group)
+        win.add_accel_group(accel_group)
+        self.item_factory.create_items((
+            ( "/_File",         None,         None, 0, "<Branch>" ),
+   	    ( "/File/_Open",    "<control>O", None, 0, None ),
+   	    ( "/File/sep1",     None,         None, 0, "<Separator>" ),
+            #( "/File/Print",    "<control>P", self.cmd_print, 0, "<StockItem>", gtk.STOCK_PRINT ),
+            ( "/File/Print...", "<control>P", self.cmd_print_to, 0, "<StockItem>", gtk.STOCK_PRINT ),
+   	    ( "/File/sep2",     None,         None, 0, "<Separator>" ),
+   	    ( "/File/Quit",     "<control>Q", self.cmd_exit, 0, "<StockItem>", gtk.STOCK_QUIT ),
+            ( "/_Tools",	None,		None, 0, "<Branch>" ),
+            ( "/Tools/_Identify", None,		self.cmd_menu_tool, 0, "<RadioItem>" ),
+            ( "/Tools/_Move", None,		self.cmd_menu_tool, 0, "/Tools/Identify" ),
+            ( "/_View",		None,		None, 0, "<Branch>" ),
+            ( "/View/View _All", None, self.cmd_zoom_fit, 0, "<StockItem>", gtk.STOCK_ZOOM_FIT ),
+            ( "/View/_Zoom In",	"<control>equal", self.cmd_zoom_in, 0, "<StockItem>", gtk.STOCK_ZOOM_IN ),
+            ( "/View/Zoom _Out", "<control>minus", self.cmd_zoom_out, 0, "<StockItem>", gtk.STOCK_ZOOM_OUT ),
+   	    ( "/View/sep1",     None,         None, 0, "<Separator>" ),
+            ( "/View/_Next Flow", "<control>Right", self.cmd_next_flow, 0, "<StockItem>", gtk.STOCK_GO_FORWARD ),
+            ( "/View/_Previous Flow", "<control>Left", self.cmd_prev_flow, 0, "<StockItem>", gtk.STOCK_GO_BACK ),
+            ( "/View/_Swap Direction", None, self.cmd_swap_dir, 0, None ),
+            ( "/View/Select _Flow", "<control>F", self.cmd_find_flow, 0, None ),
+            ( "/View/sep2",	None, None, 0, "<Separator>" ),
+            ( "/View/Hide Receive Window", None, self.cmd_toggle_receive_window, 0, None )
+   	    ))
+        menubar = self.item_factory.get_widget("<main>")
+        vbox.pack_start(menubar, 0, 0)
+        menubar.show()
+
+        self.menu_tools = { }
+        self.menu_tools[PlotCanvas.TOOL_IDENTIFY] = self.item_factory.get_item("/Tools/Identify")
+        self.menu_tools[PlotCanvas.TOOL_HAND] = self.item_factory.get_item("/Tools/Move")
+
+        self.rcv_window_item = self.item_factory.get_item("/View/Hide Receive Window")
+
+    def _init_toolbar(self, win, vbox):
+        toolbar = gtk.Toolbar()
+        toolbar.set_style(gtk.TOOLBAR_BOTH)
+        self.toolbar_tools = { }
+
+        ttip = gtk.Tooltips()
+
+        t = gtk.RadioToolButton(None, None)
+        self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY] = t
+        t.set_icon_widget(stock_image(gtk.STOCK_YES))
+        t.set_label("Ident")
+        t.set_tooltip(ttip, "Identification tool: Move near a packet for information about it; drag for bandwidth measurement", None)
+        t.connect("clicked", self.cmd_toolbar_tool, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.RadioToolButton(self.toolbar_tools[PlotCanvas.TOOL_IDENTIFY], None)
+        self.toolbar_tools[PlotCanvas.TOOL_HAND] = t
+        t.set_icon_widget(stock_image(gtk.STOCK_YES))
+        t.set_label("Move")
+        t.set_tooltip(ttip, "Move tool: Drag to shift window; control-click to zoom in; control-alt-click to zoom out", None)
+        t.connect("clicked", self.cmd_toolbar_tool, 0)
+        toolbar.insert(t, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_IN), "In")
+        t.set_tooltip(ttip, "Zoom in slightly", None)
+        t.connect("clicked", self.cmd_zoom_in, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_OUT), "Out")
+        t.set_tooltip(ttip, "Zoom out slightly", None)
+        t.connect("clicked", self.cmd_zoom_out, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_ZOOM_FIT), "All")
+        t.set_tooltip(ttip, "Show whole connection", None)
+        t.connect("clicked", self.cmd_zoom_fit, 0)
+        toolbar.insert(t, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_GO_BACK), "Prev")
+        self.prev_flow_button = t
+        t.set_tooltip(ttip, "Switch to previous flow", None)
+        t.connect("clicked", self.cmd_prev_flow, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(stock_image(gtk.STOCK_GO_FORWARD), "Next")
+        self.next_flow_button = t
+        t.set_tooltip(ttip, "Switch to next flow", None)
+        t.connect("clicked", self.cmd_next_flow, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(file_image("double_arrow_small.png"), "Swap")
+        t.set_tooltip(ttip, "Show the other flow of this connection", None)
+        t.connect("clicked", self.cmd_swap_dir, 0)
+        toolbar.insert(t, -1)
+
+        t = gtk.ToolButton(gtk.STOCK_PRINT)
+        t.connect("clicked", self.cmd_print, 0)
+        t.set_tooltip(ttip, "Print using default settings", None)
+        toolbar.insert(t, -1)
+        
+        vbox.pack_start(toolbar, 0, 0)
+        toolbar.show_all()
+
+    def _init_flowtree(self):
+        scrolled_window = gtk.ScrolledWindow()
+        scrolled_window.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+
+        self.flowtree_model = FlowSetTreeModelByLosses(self.flowset)
+        treeview = gtk.TreeView(self.flowtree_model)
+        treeview.set_headers_visible(False)
+        cell1 = gtk.CellRendererText()
+        # the text in the column comes from column 0
+        column = gtk.TreeViewColumn("tuples", cell1, text=0)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=1)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=2)
+        treeview.append_column(column)
+        column = gtk.TreeViewColumn("tuples", cell1, text=3)
+        treeview.append_column(column)
+        treeview.show()
+
+        scrolled_window.add(treeview)
+        scrolled_window.show()
+
+        treeview.connect("row_activated", self.cmd_flowtree_row_activated)
+        return scrolled_window
+
+    def _scrollbar_showhide(self, adj, scrollbar):
+        hidden = (adj.lower >= adj.value) and (adj.value + adj.page_size >= adj.upper)
+        if hidden:
+            scrollbar.hide()
+        else:
+            scrollbar.show()
+
+    def _init_plotbox(self):
+        frame = gtk.VBox()
+        frame.show()
+        
+        self.canvas = PlotCanvas(frame)
+
+        adjustment = self.canvas.get_time_adjustment()
+        scale = gtk.HScrollbar(adjustment)
+        frame.pack_start(scale, 0, 0)
+        adjustment.connect("changed", self._scrollbar_showhide, scale)
+        adjustment.connect("value_changed", self._scrollbar_showhide, scale)
+
+        self.statusbox = gtk.HBox()
+        frame.pack_start(self.statusbox, 0, 0, padding=3)
+        self.statusbox.show()
+        
+        self.statusbar = gtk.Label("")
+        self.statusbar.set_justify(gtk.JUSTIFY_LEFT)
+        self.statusbar.set_alignment(0, 0.5)
+
+        self.statusbox.pack_start(self.statusbar, True, True, padding=5)
+        self.statusbar.show()
+
+        self.progressbar = gtk.ProgressBar()
+        self.progressbar.set_property("height_request", 10)
+        self.statusbox.pack_end(self.progressbar, 0, 0, padding=3)
+
+        self.activating = None
+        self.time_range = None
+        
+        self.canvas.add_highlight_hook(self.highlight_hook)
+        return frame
+    
+    def cmd_exit(self, *args):
+        gtk.main_quit()
+
+    def cmd_print(self, widget, event, window=None):
+        try:
+            if _print_options["dest"] == PRINT_MPFILE:
+                self.canvas.plot(PlotCanvas_MetaPostDrawable(self.canvas, _print_options))
+            else:
+                self.canvas.plot(PlotCanvas_PostScriptDrawable(self.canvas, _print_options))
+            return 1
+        except IOError, (errno, strerror):
+            if window is None: window = self.window
+            dialog = gtk.MessageDialog(window,
+                     gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+                     gtk.MESSAGE_ERROR, gtk.BUTTONS_OK,
+                     "Could not print to \"%s\": %s" % ((_print_options["dest"] == PRINT_PRINTER and _print_options["command"] or _print_options["file"]), strerror))
+            dialog.run()
+            dialog.destroy()
+            return 0
+
+    def cmd_print_to(self, widget, event):
+        PrintOptionsDialog(self.window, self)
+        
+    def cmd_find_flow(self, widget, event):
+        FindFlowDialog(self.window, self)
+
+    def cmd_zoom_in(self, widget, event, data=None):
+        self.canvas.zoom(factor=0.75)
+
+    def cmd_zoom_out(self, widget, event, data=None):
+        self.canvas.zoom(factor=1.25)
+
+    def cmd_zoom_fit(self, widget, event):
+        self.canvas.view_all()
+
+    def select_tool(self, tool):
+        if self.canvas.tool != tool:
+            self.canvas.select_tool(tool)
+            self.toolbar_tools[tool].set_active(True)
+            self.menu_tools[tool].set_active(True)
+
+    def cmd_menu_tool(self, widget, toolbar):
+        for e in self.menu_tools.items():
+            if e[1].get_active(): self.select_tool(e[0])
+    def cmd_toolbar_tool(self, widget, toolbar):
+        for e in self.toolbar_tools.items():
+            if e[1].get_active(): self.select_tool(e[0])
+
+    def _activate_flow_items(self, fref):
+        self.item_factory.get_item("/View/Next Flow").set_sensitive(self.flowid < len(self.flowset) - 1)
+        self.next_flow_button.set_sensitive(self.flowid < len(self.flowset) - 1)
+        self.item_factory.get_item("/View/Previous Flow").set_sensitive(self.flowid > 0)
+        self.prev_flow_button.set_sensitive(self.flowid > 0)
+        self.rcv_window_item.set_sensitive(fref is not None and fref.has_window())
+
+    def connection(self):
+        if self.flowid is None:
+            return None
+        else:
+            return self.flowref.conn
+
+    def statusbar_description(self):
+        if self.flowref is not None:
+            desc = self.flowref.get_description()
+            desc = re.sub("<", "&lt;", desc)
+            desc = re.sub("(^\\#[0-9]+)", "<b>\\1</b>", desc)
+            self.statusbar.set_markup(desc)
+        
+    def set_flow(self, id=None, fref=None, keeptime=False):
+        if id is None:
+            id = self.flowset.index(fref)
+        if fref is None:
+            fref = self.flowset[id]
+
+        oc = self.connection()
+        if oc is not fref.conn and oc is not None:
+            oc.unload()
+
+        if self.activating is not None:
+            idle_remove(self.activating[3])
+        
+        if not fref.available():
+            self.activating = (id, fref, keeptime, self.watch_process(fref.conn.load_process(), complete=self._flow_loaded, text="Reading " + fref.conn.filename + "..."))
+        else:
+            self.activating = (id, fref, keeptime, None)
+            self._flow_loaded()
+
+    def get_aggregate(self):
+        return self.flowref.aggregate()
+
+    def get_flowset(self):
+        return self.flowset
+
+    def _flow_loaded(self):
+        id, fref, keeptime = self.activating[:3]
+        self.activating = None
+        self.canvas.set_flowref(fref, keeptime)
+        self.flowid = id
+        self.flowref = fref
+        self._activate_flow_items(fref)
+        self.statusbar_description()
+        if self.time_range is not None:
+            self.canvas.set_time_range(self.time_range[0], self.time_range[1])
+            self.time_range = None
+
+    def cmd_next_flow(self, widget, event):
+        self.set_flow(id=self.flowid + 1)
+
+    def cmd_prev_flow(self, widget, event):
+        self.set_flow(id=self.flowid - 1)
+
+    def cmd_swap_dir(self, widget, event):
+        self.set_flow(fref=self.flowref.opposite(), keeptime=True)
+
+    def cmd_flowtree_row_activated(self, widget, path, column):
+        self.set_flow(fref=self.flowtree_model.path2flowref(path))
+
+    def cmd_toggle_receive_window(self, widget, event):
+        self.canvas.set_show_window(not self.canvas.get_show_window())
+        self.item_factory.get_item("/View/Hide Receive Window").get_child().set_label(["Show Receive Window", "Hide Receive Window"][self.canvas.get_show_window()])
+
+    def highlight_hook(self, plotcanvas, h):
+    	if h[0] == "packet":
+            p, dir = h[1:]
+            if dir == self.flowref.dir:
+                desc = "%.06fs: <b>Data</b> at %d:%d (+%d)" % (p.time, int(p.seq), int(p.last_seq), int(p.last_seq - p.seq))
+            else:
+                desc = "%.06fs: <b>Ack</b> for %d" % (p.time, int(p.ack))
+                if p.dup_count > 0:
+                    desc += " (" + ordinal(p.dup_count) + " dup)"
+                if not p.pure_ack():
+                    desc += " with data (+%d)" % (p.last_seq - p.seq)
+            lit_link = plotcanvas.get_lit_link()
+            if lit_link is not None:
+                desc += " (latency %.06fs)" % (abs(lit_link[0].time - p.time))
+            self.statusbar.set_markup("<span foreground='#000099'>" + desc + "</span>")
+        elif h[0] == "bandwidth":
+            bw = h[1]
+            
+            if bw <= 0: desc = "-"
+            elif bw < 1024: desc = "%d B/s" % bw
+            elif bw < 1048576: desc = "%.3f KB/s" % (bw/1024.)
+            else: desc = "%.3f MB/s" % (bw/1048576.)
+            
+            bw *= 8
+            if bw <= 0: pass
+            elif bw < 1000: desc += " = %d b/s" % bw
+            elif bw < 1000000: desc += " = %.3f Kb/s" % (bw/1000.)
+            else: desc += " = %.3f Mb/s" % (bw/1000000.)
+
+            ds, dt = h[5] - h[3], h[4] - h[2]
+            if dt < 0: dt = -dt; ds = -ds
+            desc2 = "%+d in %.6fs" % (ds, dt)
+            
+            self.statusbar.set_markup("<span foreground='#000099'>Bandwidth: <b>" + desc + "</b> (" + desc2 + ")</span>")
+
+        elif h[0] == "box":
+            t0, s0, t1, s1 = h[1:5]
+            t0, t1 = min(t0, t1), max(t0, t1)
+            s0, s1 = min(s0, s1), max(s0, s1)
+            np = na = 0
+            p0 = 8000000000.; p1 = 0
+
+            for p in self.flowref.data_packets(begin=t0, end=t1):
+                if p.seq >= s0 and p.last_seq <= s1:
+                    np += 1
+                    p0, p1 = min(p0, p.seq), max(p1, p.last_seq)
+            for p in self.flowref.ack_packets(begin=t0, end=t1):
+                if p.ack >= s0 and p.ack <= s1:
+                    na += 1
+
+            progress = ""
+            if p0 <= p1: progress = " (+%d)" % (p1 - p0)
+            self.statusbar.set_markup("<span foreground='#000099'>%.06fs to %.06fs: <b>%d data, %d ack</b>%s</span>" % (t0, t1, np, na, progress))
+            
+        else:
+            self.statusbar_description()
+
+    def watch_process(self, process, **kw):
+        return StatusWatcher(self.statusbar, self.progressbar).run(process, **kw)
+
+
+def initial_read_complete():
+    global all_connections, window
+    window.statusbar.set_text("Sorting flows...")
+    idle_add(initial_sort_flows)
+
+def initial_sort_flows():
+    global all_connections, window, initial_aggregate
+    all_connections.sort_by_loss_count()
+    if initial_aggregate is None:
+        window.set_flow(id=0)
+    else:
+        window.set_flow(fref=window.get_flowset().find_aggregate(initial_aggregate).opposite())
+
+
+if __name__ == "__main__":
+    all_connections = FlowSet()
+    initial_aggregate = None
+    try:
+        optlist, args = getopt.getopt(sys.argv[1:], "t:f:", ["time=", "flow="])
+        window = PlotFlowWindow(all_connections)
+        for o, a in optlist:
+            if o == "-t" or o == "--time":
+                window.time_range = map(float, a.split(':'))
+                window.time_range[1] -= window.time_range[0]
+            elif o == "-f" or o == "--flow":
+                initial_aggregate = int(a)
+        if len(args) >= 1:
+            f = file(args[0])
+            p = ConnectionReader(flowset=all_connections).read_process(args[0], f)
+            window.watch_process(p, complete=initial_read_complete, text="Reading " + args[0] + "...")
+        else:
+            p = ConnectionReader(flowset=all_connections).read_process("<stdin>", sys.stdin)
+            window.watch_process(p, complete=initial_read_complete, text="Reading <stdin>...")
+        gtk.main()
+    except KeyboardInterrupt:
+        gtk.main_quit()
