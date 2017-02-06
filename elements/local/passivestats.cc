@@ -84,6 +84,8 @@ void
 PassiveStats::cleanup(CleanupStage)
 {
   print_xml();
+  if (_verbose)
+    print_and_clear_stats();
 }
 
 void 
