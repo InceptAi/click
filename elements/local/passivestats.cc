@@ -36,8 +36,6 @@ enum {NODS = 0, FROMDS, TODS, DSTODS};
 PassiveStats::PassiveStats()
     : _timer(this)
 {
-  static unsigned char bcast_addr[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-  _bcast = EtherAddress(bcast_addr);
 }
 
 PassiveStats::~PassiveStats()
@@ -50,12 +48,15 @@ PassiveStats::configure(Vector<String> &conf, ErrorHandler *errh)
   _stats_interval = 0;
   _only_data = true;
   _output_xml_file = String("");
+  _filter_by_bssid = EtherAddress();
   _verbose = true;
+
   if (cp_va_kparse(conf, this, errh,
            "OUTPUT_XML_FILE", cpkP, cpString, &_output_xml_file,
            "STATS_INTERVAL", cpkP, cpUnsigned, &_stats_interval,
            "ONLY_DATA", cpkP, cpBool, &_only_data,
            "VERBOSE", cpkP, cpBool, &_verbose,
+           "FILTER_BY_BSSID", cpkP, cpEthernetAddress, &_filter_by_bssid,
            cpEnd) < 0)
     return -1;
   return 0;
@@ -285,7 +286,10 @@ PassiveStats::parse_packet(Packet *p_in)
   current_link = WirelessLink(ap, client, bssid);
   if (_only_data && (wh->i_fc[0] & WIFI_FC0_TYPE_MASK) != WIFI_FC0_TYPE_DATA)
     return p_in;
-  
+ 
+  if (_filter_by_bssid && _filter_by_bssid != bssid)
+    return p_in;
+
   LinkInfoAllDirections *link_info_directions = _links.findp_force(current_link);
   if (!link_info_directions) {
       click_chatter("Memory overrun, no space for adding new client information\n");

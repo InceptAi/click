@@ -123,7 +123,7 @@ public:
   typedef LinkTable::const_iterator LIter;
 
   LinkTable _links;
-  EtherAddress _bcast;
+  EtherAddress _filter_by_bssid;
   unsigned _stats_interval;
   Timer _timer;
   bool _only_data;
