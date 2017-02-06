@@ -81,9 +81,7 @@ static int rt_check_header(struct ieee80211_radiotap_header *th, int len, u_int8
 		    int radiotap_padding_size = radiotap_elem_to_bytes[x];
 		    if(x==IEEE80211_RADIOTAP_CHANNEL) radiotap_padding_size = 2;
 		    int pad = bytes % radiotap_padding_size;
-		    
-		    if (pad)
-			bytes += radiotap_padding_size - pad;
+		    if (pad) bytes += radiotap_padding_size - pad;
 		    offsets[x] = ptr + bytes;
 		    bytes += radiotap_elem_to_bytes[x];
 		}
@@ -133,6 +131,11 @@ RadiotapDecap::simple_action(Packet *p)
 	if (rt_check_header(th, p->length(), offsets, additional_it_present_flags)) {
 		memset((void*)ceh, 0, sizeof(struct click_wifi_extra));
 		ceh->magic = WIFI_EXTRA_MAGIC;
+        
+		//if (rt_el_present(th, IEEE80211_RADIOTAP_TSFT)) {
+            //ceh->mactimestamp = *((u_int32_t *) rt_el_offset(th, IEEE80211_RADIOTAP_TSFT));
+        //    ceh->mactimestamp = *offsets[IEEE80211_RADIOTAP_TSFT];
+        //}
 
 		if (rt_el_present(th, IEEE80211_RADIOTAP_FLAGS)) {
 			u_int8_t flags = *offsets[IEEE80211_RADIOTAP_FLAGS];

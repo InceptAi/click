@@ -335,7 +335,7 @@ PrintWifi::simple_action(Packet *p)
   }
   sa << "Mb ";
 
-  len = sprintf(sa.reserve(9), "+%2d/", ceh->rssi);
+  len = sprintf(sa.reserve(9), "+%2d/", ceh->rssi - 256);
   sa.adjust_length(len);
 
   len = sprintf(sa.reserve(9), "%2d | ", ceh->silence);

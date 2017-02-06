@@ -53,7 +53,9 @@ Prism2Decap::simple_action(Packet *p)
     ceh->rssi = ph->rssi.data;
     ceh->silence = ph->noise.data;
     ceh->rate = ph->rate.data;
-    if (ph->istx.data) {
+	//ceh->mactimestamp = ph->mactime.data;    
+	//ceh->channel = (uint32_t)ph->channel.data;
+	if (ph->istx.data) {
       ceh->flags |= WIFI_EXTRA_TX;
     } else {
       ceh->flags &= ~WIFI_EXTRA_TX;

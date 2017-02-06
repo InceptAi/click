@@ -8,7 +8,8 @@
 // that the scanner received beacons from when click exits.
 
 
-FromDevice(ath0raw) 
+//FromDevice(ath0raw) 
+FromDevice(wlxec086b132588) 
      //  ->Print (foo, 200)
 -> prism2_decap :: Prism2Decap()
 -> extra_decap :: ExtraDecap()
