@@ -48,6 +48,7 @@ class NodeSummary : public Element { public:
   Packet *parse_packet(Packet *);
   void update_node_info(EtherAddress, IPAddress, int, int);
   void add_handlers() CLICK_COLD;
+  void print_xml();
 
   typedef HashMap<IPAddress, int> IPAddressTable;
   typedef IPAddressTable::const_iterator IPIter;

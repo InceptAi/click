@@ -93,13 +93,14 @@ NodeSummary::print_xml()
     sa << "count_ip_src='" << n._stats._count_ip_src << "' ";
     sa << "count_ip_dst='" << n._stats._count_ip_dst << "' ";
     sa << "count_tcp_src='" << n._stats._count_tcp_src << "' ";
-    sa << "count_tcp_dst='" << n._stats._count_tcp_dst << "'\n";
+    sa << "count_tcp_dst='" << n._stats._count_tcp_dst << "'>\n";
     for (IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
       IPAddress ip_addr = ip_iter.key();
       int ip_addr_count = ip_iter.value();
       sa << "<IP addr='" << ip_addr.unparse() << "' count='" << ip_addr_count << "'/>\n";
     }
-    sa << "\n\n";
+    sa << "</node>\n";
+    sa << "\n";
   }
   fprintf(fp_xml, "%s", sa.take_string().c_str());
   fclose(fp_xml);
