@@ -36,6 +36,27 @@ NodeSummary::~NodeSummary()
 
 enum {SRC = 0, DST};
 
+void
+NodeSummary::cleanup(CleanupStage)
+{
+  StringAccum sa;
+  for (NIter iter = _nodes.begin(); iter.live(); iter++) {
+	  NodeSummary::NodeInfo n = iter.value();
+	  sa << "<" << n._eth.unparse_colon() << " " << n._stats._count << ">\n";
+    sa << "   <IPs: ";
+    for (IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
+      IPAddress ip_addr = ip_iter.key();
+      int ip_addr_count = ip_iter.value();
+      sa << ip_addr.unparse() << '|' << ip_addr_count << "  ";
+    }
+    sa << ">";
+    sa << "\n\n";
+  }
+  click_chatter("%s", sa.take_string().c_str());
+}
+
+
+
 Packet *
 NodeSummary::parse_packet(Packet *p)
 {
@@ -73,22 +94,29 @@ NodeSummary::update_node_info(EtherAddress eth_addr, IPAddress ip_addr, int port
     click_chatter("Out of memory in update_node_info\n");
   }
   ninfo->_eth = eth_addr;
-  ninfo->_count++;
+  ninfo->_stats._count++;
   if (direction == SRC) {
-    ninfo->_count_ether_src++;
+    ninfo->_stats._count_ether_src++;
     if (ip_addr)
-      ninfo->_count_ip_src++;
+      ninfo->_stats._count_ip_src++;
     if (port)
-      ninfo->_count_tcp_src++;
+      ninfo->_stats._count_tcp_src++;
   } else {
-    ninfo->_count_ether_dst++;
+    ninfo->_stats._count_ether_dst++;
     if (ip_addr)
-      ninfo->_count_ip_dst++;
+      ninfo->_stats._count_ip_dst++;
     if (port)
-      ninfo->_count_tcp_dst++;
+      ninfo->_stats._count_tcp_dst++;
   }
   if (ip_addr)
-    ninfo->_ip_list.push_back(ip_addr);
+  {
+    int *count_ip = ninfo->_ip_list.findp_force(ip_addr);
+    if (!count_ip) {
+      click_chatter("Out of memory in update_node_info1\n");
+    } else {
+      (*count_ip)++;
+    }
+  }
 }
 
 enum {H_STATS, H_RESET};
@@ -102,11 +130,18 @@ NodeSummary_read_param(Element *e, void *thunk)
     StringAccum sa;
     for (NodeSummary::NIter iter = td->_nodes.begin(); iter.live(); iter++) {
 	    NodeSummary::NodeInfo n = iter.value();
-	    sa << n._eth.unparse() << " " << n._count << "\n";
+	    sa << "<" << n._eth.unparse_colon() << " " << n._stats._count << ">\n";
+      sa << "   <IPs: ";
+      for (NodeSummary::IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
+	      IPAddress ip_addr = ip_iter.key();
+	      int ip_addr_count = ip_iter.value();
+        sa << ip_addr.unparse() << '|' << ip_addr_count << "  ";
+      }
+      sa << ">";
+      sa << "\n\n";
     }
     return sa.take_string();
   }
-
   default:
     return String();
   }
@@ -131,7 +166,14 @@ NodeSummary::add_handlers()
 	add_read_handler("stats", NodeSummary_read_param, H_STATS);
 	add_write_handler("reset", NodeSummary_write_param, H_RESET, Handler::BUTTON);
 }
-
+ 
+// generate Vector template instance
+#include <click/bighashmap.cc>
+#include <click/vector.cc>
+#if EXPLICIT_TEMPLATE_INSTANCES
+template class HashMap<IPAddress, int>;
+template class HashMap<EtherAddress, NodeSummary::NodeInfo>;
+#endif
 CLICK_ENDDECLS
 EXPORT_ELEMENT(NodeSummary)
 

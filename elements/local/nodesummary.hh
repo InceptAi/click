@@ -40,16 +40,17 @@ class NodeSummary : public Element { public:
 
   const char *class_name() const		{ return "NodeSummary"; }
   const char *port_count() const		{ return PORTS_0_0; }
-
+  void cleanup(CleanupStage) CLICK_COLD;
   bool can_live_reconfigure() const		{ return true; }
 
   Packet *parse_packet(Packet *);
   void update_node_info(EtherAddress, IPAddress, int, int);
   void add_handlers() CLICK_COLD;
 
-  class NodeInfo {
-  public:
-    EtherAddress _eth;
+  typedef HashMap<IPAddress, int> IPAddressTable;
+  typedef IPAddressTable::const_iterator IPIter;
+
+  struct NodeStats {
     int _count;
     int _count_ether_src;
     int _count_ip_src;
@@ -57,16 +58,26 @@ class NodeSummary : public Element { public:
     int _count_ether_dst;
     int _count_ip_dst;
     int _count_tcp_dst;
-    String _device_info;
-
-    Vector<IPAddress> _ip_list;
-    
-    NodeInfo() {
-      memset(this, 0, sizeof(*this));
+    NodeStats() {
+      _count = 0;
+      _count_ether_src = 0;
+      _count_ip_src = 0;
+      _count_tcp_src = 0;
+      _count_ether_dst = 0;
+      _count_ip_dst = 0;
+      _count_tcp_dst = 0;
     }
+  };
 
+  class NodeInfo {
+  public:
+    EtherAddress _eth;
+    String _device_info;
+    IPAddressTable _ip_list;
+    NodeStats _stats;
+    NodeInfo() {
+    }
     NodeInfo(EtherAddress eth) {
-      memset(this, 0, sizeof(*this));
       _eth = eth;
     }
 
