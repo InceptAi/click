@@ -36,9 +36,22 @@ NodeSummary::~NodeSummary()
 
 enum {SRC = 0, DST};
 
+int
+NodeSummary::configure(Vector<String> &conf, ErrorHandler *errh)
+{
+  _output_xml_file = String("");
+  if (cp_va_kparse(conf, this, errh,
+        "OUTPUT_XML_FILE", cpkP, cpString, &_output_xml_file,
+        cpEnd) < 0)
+    return -1;
+  return 0;
+}
+
 void
 NodeSummary::cleanup(CleanupStage)
 {
+  print_xml();
+  /*
   StringAccum sa;
   for (NIter iter = _nodes.begin(); iter.live(); iter++) {
 	  NodeSummary::NodeInfo n = iter.value();
@@ -53,9 +66,45 @@ NodeSummary::cleanup(CleanupStage)
     sa << "\n\n";
   }
   click_chatter("%s", sa.take_string().c_str());
+  */
 }
 
+void
+NodeSummary::print_xml()
+{
+  if (_output_xml_file == "") {
+    return;
+  }
 
+  FILE *fp_xml = fopen(_output_xml_file.c_str(),"w");
+  if(fp_xml == 0) {
+    click_chatter("cannot open file %s", _output_xml_file.c_str());
+    return;
+  }
+
+  StringAccum sa;
+  sa << "<?xml version='1.0' standalone='yes'?>\n";
+  for (NIter iter = _nodes.begin(); iter.live(); iter++) {
+	  NodeSummary::NodeInfo n = iter.value();
+	  sa << "<node ether='" << n._eth.unparse_colon() << "' ";
+    sa << "count='" << n._stats._count << "' ";
+    sa << "count_eth_src='" << n._stats._count_ether_src << "' ";
+    sa << "count_eth_dst='" << n._stats._count_ether_dst << "' ";
+    sa << "count_ip_src='" << n._stats._count_ip_src << "' ";
+    sa << "count_ip_dst='" << n._stats._count_ip_dst << "' ";
+    sa << "count_tcp_src='" << n._stats._count_tcp_src << "' ";
+    sa << "count_tcp_dst='" << n._stats._count_tcp_dst << "'\n";
+    for (IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
+      IPAddress ip_addr = ip_iter.key();
+      int ip_addr_count = ip_iter.value();
+      sa << "<IP addr='" << ip_addr.unparse() << "' count='" << ip_addr_count << "'/>\n";
+    }
+    sa << "\n\n";
+  }
+  fprintf(fp_xml, "%s", sa.take_string().c_str());
+  fclose(fp_xml);
+  click_chatter("%s", sa.take_string().c_str());
+}
 
 Packet *
 NodeSummary::parse_packet(Packet *p)
@@ -66,11 +115,9 @@ NodeSummary::parse_packet(Packet *p)
   IPAddress src_ip, dst_ip;
   EtherAddress src_ether, dst_ether;
   int src_port = 0, dst_port = 0;
-  //Update ethernet info
   if (eh) {
 	  src_ether = EtherAddress(eh->ether_shost);
 	  dst_ether = EtherAddress(eh->ether_dhost);
-    //Update associated ip addresses
     if (iph) {
       src_ip = IPAddress(iph->ip_src);
       dst_ip = IPAddress(iph->ip_dst);
@@ -79,7 +126,6 @@ NodeSummary::parse_packet(Packet *p)
         dst_port = tcph->th_dport;
       }
     }
-    // Update node info
     update_node_info(src_ether, src_ip, src_port, SRC);
     update_node_info(dst_ether, dst_ip, dst_port, DST);
   }

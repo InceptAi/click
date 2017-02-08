@@ -31,7 +31,7 @@ CLICK_DECLS
 #define min(x,y)      ((x)<(y) ? (x) : (y))
 #define max(x,y)      ((x)>(y) ? (x) : (y))
 
-enum {NODS = 0, FROMDS, TODS, DSTODS}; 
+enum {NODS = 0, FROMDS, TODS, DSTODS};
 
 PassiveStats::PassiveStats()
     : _timer(this)
@@ -77,7 +77,7 @@ PassiveStats::run_timer(Timer *)
     _timer.schedule_after_sec(_stats_interval);
     if (_verbose)
       print_and_clear_stats();
-  } 
+  }
 }
 
 void
@@ -88,7 +88,7 @@ PassiveStats::cleanup(CleanupStage)
     print_and_clear_stats();
 }
 
-void 
+void
 PassiveStats::print_and_clear_stats()
 {
   Timestamp now = Timestamp::now();
@@ -132,20 +132,18 @@ PassiveStats::print_and_clear_stats()
     }
     sa << "\n";
   }
-  //_links.clear();
   click_chatter("%s",sa.c_str());
-  //return sa.take_string();
 }
 
 
 
-void 
+void
 PassiveStats::print_xml()
 {
   if (_output_xml_file == "") {
     return;
   }
-  
+
   FILE *fp_xml = fopen(_output_xml_file.c_str(),"w");
   if(fp_xml == 0) {
     click_chatter("cannot open file %s", _output_xml_file.c_str());
@@ -180,12 +178,12 @@ PassiveStats::print_xml()
       default:
         direction_string = String("Undef");
         break;
-      } 
+      }
       int avg_signal;
       int avg_noise;
       int avg_data_pkt_size;
       int avg_pkt_duration;
-        
+
       sa << "    <stream dir='" << direction_string << "'";
       sa << " total_pkts='" << l._total_pkts << "'";
       sa << " total_retx='" << l._total_retx_pkts  << "'" ;
@@ -227,23 +225,23 @@ Packet *
 PassiveStats::parse_packet(Packet *p_in)
 {
   EtherAddress src;
-  EtherAddress dst; 
+  EtherAddress dst;
   EtherAddress ap;
-  EtherAddress client; 
+  EtherAddress client;
   EtherAddress bssid;
- 
-  unsigned curr_rate; 
-  //unsigned curr_channel; 
-  uint64_t curr_tx_end; 
+
+  unsigned curr_rate;
+  //unsigned curr_channel;
+  uint64_t curr_tx_end;
   unsigned curr_tx_duration = 0;
   unsigned curr_tx_len;
   uint16_t curr_tx_seq;
-  
-  struct click_wifi *wh = (struct click_wifi *) p_in->data(); 
-  struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p_in); 
+
+  struct click_wifi *wh = (struct click_wifi *) p_in->data();
+  struct click_wifi_extra *ceh = WIFI_EXTRA_ANNO(p_in);
   int type = wh->i_fc[0] & WIFI_FC0_TYPE_MASK;
   int subtype = wh->i_fc[0] & WIFI_FC0_SUBTYPE_MASK;
-  //unsigned duration = (unsigned)cpu_to_le16(wh->i_dur); 
+  //unsigned duration = (unsigned)cpu_to_le16(wh->i_dur);
   uint16_t tx_seq = le16_to_cpu(wh->i_seq) >> WIFI_SEQ_SEQ_SHIFT;
 
   WirelessLink current_link;
@@ -288,7 +286,7 @@ PassiveStats::parse_packet(Packet *p_in)
   current_link = WirelessLink(ap, client, bssid);
   if (_only_data && (wh->i_fc[0] & WIFI_FC0_TYPE_MASK) != WIFI_FC0_TYPE_DATA)
     return p_in;
- 
+
   if (_filter_by_bssid && _filter_by_bssid != bssid)
     return p_in;
 
@@ -302,10 +300,10 @@ PassiveStats::parse_packet(Packet *p_in)
   curr_tx_end = p_in->timestamp_anno().usecval();
   //click_chatter("mactimestamp: %lu, %lu\n", p_in->timestamp_anno(), curr_tx_end);
   curr_tx_len = p_in->length();
-  curr_tx_seq = tx_seq; 
+  curr_tx_seq = tx_seq;
   //curr_tx_duration = max(calc_transmit_time((int)(curr_rate), (int)curr_tx_len), duration);
   curr_tx_duration = calc_usecs_wifi_packet((int)curr_tx_len, (int)(curr_rate), 0);
- 
+
   //update link stats
   link_info->_last_received.assign_now();
   link_info->_signal_vector.push_back(ceh->rssi);
@@ -316,7 +314,7 @@ PassiveStats::parse_packet(Packet *p_in)
     link_info->_total_retx_pkts++;
   }
   link_info->_last_seq_number = (unsigned) curr_tx_seq;
-  
+
   //Vivek : Adding detailed information
   switch (type) {
   case WIFI_FC0_TYPE_MGT:
@@ -331,7 +329,7 @@ PassiveStats::parse_packet(Packet *p_in)
       case WIFI_FC0_SUBTYPE_REASSOC_REQ: {
         break;
       }
-      case WIFI_FC0_SUBTYPE_REASSOC_RESP: {   
+      case WIFI_FC0_SUBTYPE_REASSOC_RESP: {
       break;
       }
       case WIFI_FC0_SUBTYPE_PROBE_REQ: {
@@ -343,7 +341,7 @@ PassiveStats::parse_packet(Packet *p_in)
       case WIFI_FC0_SUBTYPE_BEACON: {
         break;
       }
-      case WIFI_FC0_SUBTYPE_ATIM: { 
+      case WIFI_FC0_SUBTYPE_ATIM: {
         break;
       }
       case WIFI_FC0_SUBTYPE_DISASSOC: {
@@ -388,7 +386,7 @@ PassiveStats_read_param(Element *e, void *thunk)
   PassiveStats *td = (PassiveStats *)e;
   switch ((uintptr_t) thunk) {
   case H_STATS: {
-    Timestamp now = Timestamp::now(); 
+    Timestamp now = Timestamp::now();
     StringAccum sa;
     for (PassiveStats::LIter iter = td->_links.begin(); iter.live(); iter++) {
     WirelessLink current_link = iter.key();
@@ -417,23 +415,23 @@ PassiveStats_read_param(Element *e, void *thunk)
   default:
     return String();
   }
-}  
+}
 
 
 
-static int 
+static int
 PassiveStats_write_param(const String &in_s, Element *e, void *vparam,
           ErrorHandler *)
 {
   PassiveStats *f = (PassiveStats *)e;
   String s = cp_uncomment(in_s);
   switch((intptr_t)vparam) {
-    case H_RESET: 
+    case H_RESET:
       f->_links.clear(); return 0;
   }
   return 0;
 }
-    
+
 void
 PassiveStats::add_handlers()
 {

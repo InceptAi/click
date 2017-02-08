@@ -40,6 +40,8 @@ class NodeSummary : public Element { public:
 
   const char *class_name() const		{ return "NodeSummary"; }
   const char *port_count() const		{ return PORTS_0_0; }
+
+  int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
   void cleanup(CleanupStage) CLICK_COLD;
   bool can_live_reconfigure() const		{ return true; }
 
@@ -86,6 +88,7 @@ class NodeSummary : public Element { public:
   typedef NodeTable::const_iterator NIter;
 
   NodeTable _nodes;
+  String _output_xml_file;
 
 };
 

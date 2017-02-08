@@ -33,15 +33,15 @@ Clear all information for each source
 */
 
 
-class PassiveStats : public Element { 
+class PassiveStats : public Element {
 
-public:  
+public:
   PassiveStats();
   ~PassiveStats();
-  
+
   const char *class_name() const    { return "PassiveStats"; }
   const char *port_count() const    { return PORTS_0_0; }
-  
+
   int configure(Vector<String> &, ErrorHandler *);
   void cleanup(CleanupStage);
   bool can_live_reconfigure() const     { return true; }
@@ -55,7 +55,7 @@ public:
   static String read_handler(Element *e, void *);
   static int write_handler(const String &arg, Element *e,
                void *, ErrorHandler *errh);
- 
+
  class LinkInfo {
 
  public:
@@ -78,10 +78,10 @@ public:
   Vector<unsigned> _signal_vector;
   Vector<unsigned> _rate_data_pkts_vector;
   Vector<unsigned> _size_data_pkts_vector;
-  LinkInfo() { 
+  LinkInfo() {
      memset(this, 0, sizeof(*this));
   }
-    
+
   static int unsigned_compare(const void *va, const void *vb, void *) {
         unsigned a = *reinterpret_cast<const unsigned *>(va),
           b = *reinterpret_cast<const unsigned *>(vb);
@@ -117,7 +117,7 @@ public:
 
   };
 
-  typedef HashMap<int, LinkInfo> LinkInfoAllDirections; 
+  typedef HashMap<int, LinkInfo> LinkInfoAllDirections;
   typedef LinkInfoAllDirections::const_iterator DIter;
   typedef HashMap<WirelessLink, LinkInfoAllDirections> LinkTable;
   typedef LinkTable::const_iterator LIter;
