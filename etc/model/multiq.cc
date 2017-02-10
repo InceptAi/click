@@ -350,7 +350,8 @@ MultiQ::significant_flow(const TCPCollector::Stream* stream, const TCPCollector:
     uint32_t data_packets = stream->total_packets - stream->ack_packets;
     return (data_packets >= 50
 	    && data_packets / duration >= 9.5
-	    && stream->mtu == 1500);
+	    //&& stream->mtu == 1500);
+	    && stream->mtu >= 1000);
 }
 
 void

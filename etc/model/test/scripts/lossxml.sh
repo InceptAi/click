@@ -59,7 +59,7 @@ fd :: $from
     -> aipf :: AggregateIPFlows
     -> IPFilter(0 tcp || icmp)
     -> loss :: CalculateTCPLossEvents(TRACEINFO $base.xml, /*FLOWDUMPS tifd,*/ SOURCE fd, IP_ID false, NOTIFIER aipf, ACKCAUSALITY true, UNDELIVERED true)
-    // -> tifd :: ToIPFlowDumps($base.dir, NOTIFIER aipf, TCP_OPT true, TCP_WINDOW true)
+    //-> tifd :: ToIPFlowDumps($base.dir, NOTIFIER aipf, TCP_OPT true, TCP_WINDOW true)
     -> Discard;
 
 ProgressBar(fd.filepos, fd.filesize, BANNER '$dir$base')

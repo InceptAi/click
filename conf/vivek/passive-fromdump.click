@@ -10,4 +10,7 @@ FromDump(test-basic.pcap, STOP true)
 -> Classifier(!0/80%f0) // filter out beacons
 //-> PrintWifi()
 -> wireless_monitor::WirelessMonitor(PASSIVE_STATS_TABLE passive_table)
+-> Strip(14
+-> check_ip::CheckIPHeader()
+-> node_summary::NodeSummary()
 -> Discard;
