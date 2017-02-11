@@ -136,7 +136,6 @@ PassiveStats::print_and_clear_stats()
 }
 
 
-
 void
 PassiveStats::print_xml()
 {
@@ -153,6 +152,7 @@ PassiveStats::print_xml()
   StringAccum sa;
   String direction_string;
   sa << "<?xml version='1.0' standalone='yes'?>\n";
+  sa << "<links>\n";
   for (PassiveStats::LIter iter = _links.begin(); iter.live(); iter++) {
     WirelessLink current_link = iter.key();
     LinkInfoAllDirections ld = iter.value();
@@ -210,6 +210,7 @@ PassiveStats::print_xml()
     }
     sa << "</link>\n";
   }
+  sa << "</links>\n";
   //_links.clear();
   //return sa.take_string();
   if (_verbose) {

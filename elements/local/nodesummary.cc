@@ -100,6 +100,7 @@ NodeSummary::print_xml()
 
   StringAccum sa;
   sa << "<?xml version='1.0' standalone='yes'?>\n";
+  sa << "<nodes>\n";
   for (NIter iter = _nodes.begin(); iter.live(); iter++) {
 	  NodeSummary::NodeInfo n = iter.value();
 	  sa << "<node ether='" << n._eth.unparse_colon() << "' ";
@@ -120,6 +121,7 @@ NodeSummary::print_xml()
     sa << "</node>\n";
     sa << "\n";
   }
+  sa << "</nodes>\n";
   fprintf(fp_xml, "%s", sa.take_string().c_str());
   fclose(fp_xml);
   click_chatter("%s", sa.take_string().c_str());
