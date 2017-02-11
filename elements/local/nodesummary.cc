@@ -24,6 +24,7 @@
 #include <clicknet/ether.h>
 #include <clicknet/wifi.h>
 #include "nodesummary.hh"
+#define ETHER_ADDRESS_PREFIX_SIZE 8
 CLICK_DECLS
 
 NodeSummary::NodeSummary()
@@ -40,33 +41,48 @@ int
 NodeSummary::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   _output_xml_file = String("");
+  String vendors_file = String("");
   if (cp_va_kparse(conf, this, errh,
         "OUTPUT_XML_FILE", cpkP, cpString, &_output_xml_file,
+        "VENDOR_DIR", cpkP, cpString, &vendors_file,
         cpEnd) < 0)
     return -1;
+  if (vendors_file != "" && populate_vendors(vendors_file) < 0) {
+    click_chatter("Unable to read vendors file: %s, will not do reverse lookup", vendors_file.c_str());
+  }
   return 0;
 }
+
+int
+NodeSummary::populate_vendors(String vendors_file)
+{
+  FILE *fp_vendor = fopen(vendors_file.c_str(),"r");
+  if(fp_vendor == 0) {
+    click_chatter("cannot open file %s", vendors_file.c_str());
+    return -1;
+  }
+  char mac[512];
+  char vendor[512];
+  char buf[2048];
+  while(fgets(buf, sizeof(buf), fp_vendor)){
+    EtherAddress macaddress;
+    String buf_string = String(buf);
+    if (sscanf(buf, "%s %s", mac, vendor) == 2 && mac[0] != '#') {
+      String mac_string = String(mac);
+      String prefix = mac_string.substring(0, ETHER_ADDRESS_PREFIX_SIZE);
+      String *vendor_string = _vendors.findp_force(prefix);
+      *vendor_string = String(vendor);
+    } 
+  }
+  fclose(fp_vendor);
+  return 0;
+}
+
 
 void
 NodeSummary::cleanup(CleanupStage)
 {
   print_xml();
-  /*
-  StringAccum sa;
-  for (NIter iter = _nodes.begin(); iter.live(); iter++) {
-	  NodeSummary::NodeInfo n = iter.value();
-	  sa << "<" << n._eth.unparse_colon() << " " << n._stats._count << ">\n";
-    sa << "   <IPs: ";
-    for (IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
-      IPAddress ip_addr = ip_iter.key();
-      int ip_addr_count = ip_iter.value();
-      sa << ip_addr.unparse() << '|' << ip_addr_count << "  ";
-    }
-    sa << ">";
-    sa << "\n\n";
-  }
-  click_chatter("%s", sa.take_string().c_str());
-  */
 }
 
 void
@@ -87,6 +103,8 @@ NodeSummary::print_xml()
   for (NIter iter = _nodes.begin(); iter.live(); iter++) {
 	  NodeSummary::NodeInfo n = iter.value();
 	  sa << "<node ether='" << n._eth.unparse_colon() << "' ";
+    if (!n._vendor.empty()) 
+      sa << "vendor='" << n._vendor.c_str() << "' ";
     sa << "count='" << n._stats._count << "' ";
     sa << "count_eth_src='" << n._stats._count_ether_src << "' ";
     sa << "count_eth_dst='" << n._stats._count_ether_dst << "' ";
@@ -142,6 +160,13 @@ NodeSummary::update_node_info(EtherAddress eth_addr, IPAddress ip_addr, int port
   }
   ninfo->_eth = eth_addr;
   ninfo->_stats._count++;
+  String eth_substring_colon = eth_addr.unparse_colon().substring(0,ETHER_ADDRESS_PREFIX_SIZE);
+  String eth_substring_dash = eth_addr.unparse().substring(0,ETHER_ADDRESS_PREFIX_SIZE);
+  if (_vendors.findp(eth_substring_colon)) {
+    ninfo->_vendor = *(_vendors.findp(eth_substring_colon));
+  } else if (_vendors.findp(eth_substring_dash)) {
+    ninfo->_vendor = *(_vendors.findp(eth_substring_dash));
+  }
   if (direction == SRC) {
     ninfo->_stats._count_ether_src++;
     if (ip_addr)
@@ -219,6 +244,7 @@ NodeSummary::add_handlers()
 #include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class HashMap<IPAddress, int>;
+template class HashMap<String, String>;
 template class HashMap<EtherAddress, NodeSummary::NodeInfo>;
 #endif
 CLICK_ENDDECLS

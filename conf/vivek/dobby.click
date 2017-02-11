@@ -1,9 +1,9 @@
 require(model)
 passive_table::PassiveStats(OUTPUT_XML_FILE wireless_summary.xml, VERBOSE 0, ONLY_DATA 0, FILTER_BY_BSSID 98:FC:11:50:AF:A6);
-node_summary::NodeSummary(OUTPUT_XML_FILE node_summary.xml);
+node_summary::NodeSummary(OUTPUT_XML_FILE node_summary.xml, VENDOR_DIR /tmp/vendors.txt);
 
 //FromDevice(wlxec086b132588)
-fd::FromDump(test-basic.pcap, STOP true)
+fd::FromDump(/tmp/test1.pcap, STOP true)
 -> prism2_decap :: Prism2Decap()
 -> extra_decap :: ExtraDecap()
 -> tap_decap :: RadiotapDecap()

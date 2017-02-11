@@ -42,6 +42,7 @@ class NodeSummary : public Element { public:
   const char *port_count() const		{ return PORTS_0_0; }
 
   int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
+  int populate_vendors(String);
   void cleanup(CleanupStage) CLICK_COLD;
   bool can_live_reconfigure() const		{ return true; }
 
@@ -76,6 +77,7 @@ class NodeSummary : public Element { public:
   public:
     EtherAddress _eth;
     String _device_info;
+    String _vendor;
     IPAddressTable _ip_list;
     NodeStats _stats;
     NodeInfo() {
@@ -88,8 +90,13 @@ class NodeSummary : public Element { public:
   typedef HashMap<EtherAddress, NodeInfo> NodeTable;
   typedef NodeTable::const_iterator NIter;
 
+  typedef HashMap<String, String> VendorTable;
+  typedef VendorTable::const_iterator VIter;
+
   NodeTable _nodes;
   String _output_xml_file;
+  VendorTable _vendors;
+
 
 };
 
