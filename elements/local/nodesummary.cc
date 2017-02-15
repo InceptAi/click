@@ -24,7 +24,12 @@
 #include <clicknet/ether.h>
 #include <clicknet/wifi.h>
 #include "nodesummary.hh"
+// Includes for getnameinfo
+#include <netdb.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #define ETHER_ADDRESS_PREFIX_SIZE 8
+
 CLICK_DECLS
 
 NodeSummary::NodeSummary()
@@ -37,14 +42,43 @@ NodeSummary::~NodeSummary()
 
 enum {SRC = 0, DST};
 
+void
+NodeSummary::perform_reverse_lookup(IPAddress ip_addr, int port, String *host, String *service)
+{
+  *host = String("");
+  *service = String("");
+  if (!_resolve_ip) {
+    return;
+  }
+  struct sockaddr_in sa;
+  char hostname[1000], servicename[1000];
+  int name_info_ret_value;
+  if (inet_pton(AF_INET, ip_addr.unparse().c_str(), &sa.sin_addr) <= 0)
+  {
+    return;
+  }
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(port);
+  if ((name_info_ret_value=getnameinfo((struct sockaddr*)&sa, sizeof sa,
+    hostname, sizeof hostname, servicename, sizeof servicename, 0)) != 0) {
+    //click_chatter("getnameinfo error\n");
+    return;
+  }
+  *host = String(hostname);
+  *service = String(servicename);
+  return;
+}
+
 int
 NodeSummary::configure(Vector<String> &conf, ErrorHandler *errh)
 {
   _output_xml_file = String("");
   String vendors_file = String("");
+  _resolve_ip = false;
   if (cp_va_kparse(conf, this, errh,
         "OUTPUT_XML_FILE", cpkP, cpString, &_output_xml_file,
         "VENDOR_DIR", cpkP, cpString, &vendors_file,
+        "RESOLVE_IP", cpkP, cpBool, &_resolve_ip,
         cpEnd) < 0)
     return -1;
   if (vendors_file != "" && populate_vendors(vendors_file) < 0) {
@@ -114,9 +148,27 @@ NodeSummary::print_xml()
     sa << "count_tcp_src='" << n._stats._count_tcp_src << "' ";
     sa << "count_tcp_dst='" << n._stats._count_tcp_dst << "'>\n";
     for (IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
-      IPAddress ip_addr = ip_iter.key();
-      int ip_addr_count = ip_iter.value();
-      sa << "<IP addr='" << ip_addr.unparse() << "' count='" << ip_addr_count << "'/>\n";
+      IPAddress ip_key = ip_iter.key();
+      IPInfo ip_info = ip_iter.value();
+      sa << "<ip addr='" << ip_key.unparse() << "' ";
+      if (ip_info._hostname == ip_key.unparse()) {
+        sa << "hostname=''>\n";
+      } else {
+        sa << "hostname='" << ip_info._hostname << "'>\n";
+      }
+      for (PIter port_iter = ip_info._porttable.begin(); port_iter.live(); port_iter++) {
+        int port_key = port_iter.key();
+        String servicename = port_iter.value();
+        String portstring = String(port_key);
+        sa << "       <port number='" << port_key << "'";
+        if (portstring == servicename) {
+          sa << " servicename=''";
+        } else {
+          sa << " servicename='" << servicename << "'";
+        }
+        sa << "/>\n";
+      }
+      sa << "</ip>\n";
     }
     sa << "</node>\n";
     sa << "\n";
@@ -182,13 +234,19 @@ NodeSummary::update_node_info(EtherAddress eth_addr, IPAddress ip_addr, int port
     if (port)
       ninfo->_stats._count_tcp_dst++;
   }
-  if (ip_addr)
+  if(ip_addr)
   {
-    int *count_ip = ninfo->_ip_list.findp_force(ip_addr);
-    if (!count_ip) {
+    IPInfo *ip_info = ninfo->_ip_list.findp_force(ip_addr);
+    if (!ip_info) {
       click_chatter("Out of memory in update_node_info1\n");
     } else {
-      (*count_ip)++;
+      if (!ip_info->_porttable.findp(port)) { 
+        String *servicename = ip_info->_porttable.findp_force(port);
+        String *hostname = new String("");
+        perform_reverse_lookup(ip_addr, port, hostname, servicename);
+        if (*hostname != "")
+          ip_info->_hostname = *hostname;
+      }
     }
   }
 }
@@ -198,24 +256,9 @@ enum {H_STATS, H_RESET};
 static String
 NodeSummary_read_param(Element *e, void *thunk)
 {
-  NodeSummary *td = (NodeSummary *)e;
+  //NodeSummary *td = (NodeSummary *)e;
   switch ((uintptr_t) thunk) {
-  case H_STATS: {
-    StringAccum sa;
-    for (NodeSummary::NIter iter = td->_nodes.begin(); iter.live(); iter++) {
-	    NodeSummary::NodeInfo n = iter.value();
-	    sa << "<" << n._eth.unparse_colon() << " " << n._stats._count << ">\n";
-      sa << "   <IPs: ";
-      for (NodeSummary::IPIter ip_iter = n._ip_list.begin(); ip_iter.live(); ip_iter++) {
-	      IPAddress ip_addr = ip_iter.key();
-	      int ip_addr_count = ip_iter.value();
-        sa << ip_addr.unparse() << '|' << ip_addr_count << "  ";
-      }
-      sa << ">";
-      sa << "\n\n";
-    }
-    return sa.take_string();
-  }
+  case H_STATS:
   default:
     return String();
   }
@@ -246,6 +289,7 @@ NodeSummary::add_handlers()
 #include <click/vector.cc>
 #if EXPLICIT_TEMPLATE_INSTANCES
 template class HashMap<IPAddress, int>;
+template class HashMap<int, String>;
 template class HashMap<String, String>;
 template class HashMap<EtherAddress, NodeSummary::NodeInfo>;
 #endif

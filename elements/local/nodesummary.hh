@@ -38,6 +38,32 @@ class NodeSummary : public Element { public:
   NodeSummary() CLICK_COLD;
   ~NodeSummary() CLICK_COLD;
 
+  typedef HashMap<int, String> PortInfoTable;
+  typedef PortInfoTable::const_iterator PIter;
+
+  struct IPInfo {
+    String _hostname;
+    PortInfoTable _porttable;
+    IPInfo() {
+      _hostname = "";
+    }
+    IPInfo(int port) {
+      _hostname = "";
+      String *servicename = _porttable.findp_force(port);
+      *servicename = "";
+    }
+    IPInfo(int port, String service) {
+      _hostname = "";
+      String *servicename = _porttable.findp_force(port);
+      *servicename = service;
+    }
+    IPInfo(String hostname, int port, String service) {
+      _hostname = hostname;
+      String *servicename = _porttable.findp_force(port);
+      *servicename = service;
+    }
+  };
+
   const char *class_name() const		{ return "NodeSummary"; }
   const char *port_count() const		{ return PORTS_0_0; }
 
@@ -47,11 +73,12 @@ class NodeSummary : public Element { public:
   bool can_live_reconfigure() const		{ return true; }
 
   Packet *parse_packet(Packet *);
+  void perform_reverse_lookup(IPAddress, int, String *, String *);
   void update_node_info(EtherAddress, IPAddress, int, int);
   void add_handlers() CLICK_COLD;
   void print_xml();
 
-  typedef HashMap<IPAddress, int> IPAddressTable;
+  typedef HashMap<IPAddress, IPInfo> IPAddressTable;
   typedef IPAddressTable::const_iterator IPIter;
 
   struct NodeStats {
@@ -96,6 +123,7 @@ class NodeSummary : public Element { public:
   NodeTable _nodes;
   String _output_xml_file;
   VendorTable _vendors;
+  bool _resolve_ip;
 
 
 };
